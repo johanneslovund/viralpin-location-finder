@@ -48,7 +48,7 @@
       background: transparent;
       display: flex; align-items: center; justify-content: center;
       pointer-events: none;
-      transition: opacity 2s ease;
+      transition: opacity 3s ease;
     }
     #loading-screen.fade-out { opacity: 0; }
     #loading-logo { width: min(260px, 65vw); height: auto; filter: drop-shadow(0 2px 24px rgba(0,0,0,0.9)); }
@@ -366,8 +366,8 @@
       width: 52px; height: 52px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
     }
     .history-info { min-width: 0; }
-    .history-title { font-size: 0.78rem; color: #dde2f5; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .history-coords { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
+    .history-location { font-size: 0.78rem; color: #dde2f5; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-title { font-size: 0.65rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* ── My Locations modal ── */
     #my-locations-modal {
@@ -617,6 +617,7 @@
 <!-- Loading screen -->
 <div id="loading-screen">
   <img id="loading-logo" src="logo.png" alt="CinePin" />
+  <div class="loading-spinner"></div>
 </div>
 <div id="loading-bg"></div>
 
@@ -1974,8 +1975,8 @@ function openHistory() {
     <div class="history-item" data-idx="${i}">
       <img class="history-thumb" src="${escHtml(ph.thumb)}" alt="" />
       <div class="history-info">
+        <div class="history-location" id="hloc-${i}">${ph.lat.toFixed(4)}°, ${ph.lng.toFixed(4)}°</div>
         <div class="history-title">${escHtml(ph.title)}</div>
-        <div class="history-coords">${ph.lat.toFixed(4)}°, ${ph.lng.toFixed(4)}°</div>
       </div>
     </div>`).join("");
   list.querySelectorAll(".history-item").forEach((el, i) => {
@@ -1984,6 +1985,19 @@ function openHistory() {
       openLightbox(hist[i]);
     });
   });
+  // Fill in location names: check geocode cache first, then fetch with rate limiting
+  (async () => {
+    for (let i = 0; i < hist.length; i++) {
+      const ph = hist[i];
+      const cached = geocodeCache.get(`${ph.lat.toFixed(3)},${ph.lng.toFixed(3)},city`);
+      const el = document.getElementById(`hloc-${i}`);
+      if (!el) continue;
+      if (cached) { el.textContent = cached; continue; }
+      await sleep(300);
+      const name = await reverseGeocodeCity(ph.lat, ph.lng).catch(() => null);
+      if (el && name) el.textContent = name;
+    }
+  })();
 }
 
 document.getElementById("history-btn").addEventListener("click", openHistory);
@@ -2187,18 +2201,17 @@ L.DomEvent.disableClickPropagation(locSearchWrap);
 
 // ─── Intro animation ──────────────────────────────────────────────────────────
 // Timeline:
-//  t=0–3s : dark bg + logo — static hold
-//  t=3–6s : background fades out (3s), logo stays on globe
-//  t=4s   : zoom starts (10s)
-//  t=12s  : logo fades (2s)
-//  t=14s  : done
+//  t=0–4s  : dark bg + logo + spinner — static hold
+//  t=4–7s  : background fades (3s), logo stays on globe, zoom starts
+//  t=~14s  : flyTo ends (moveend) → logo fades over 3s
+//  t=~17s  : everything done
 
 hasPanned = true; // block GPS watchPosition during intro
 
-// Background starts fading at t=3s (holds for 3s first)
+// At t=4s: bg starts fading (same moment as zoom)
 setTimeout(() => {
   document.getElementById("loading-bg").classList.add("fade-out");
-}, 3000);
+}, 4000);
 
 // GPS prefetch — fetch photos for user location as soon as signal arrives,
 // even while the animation is still running
@@ -2229,27 +2242,24 @@ if ("geolocation" in navigator) {
   );
 }
 
-// t=4s: start 10s zoom
+// t=4s: start 10s zoom; on moveend fade logo over 3s
 setTimeout(() => {
   const target = introTarget || [65.0, 14.0];
   const zoom   = introTarget ? 13 : 5.5;
   map.flyTo(target, zoom, { duration: 10, easeLinearity: 0.04 });
+
+  // When this specific flyTo ends, fade logo (3s)
+  map.once("moveend", () => {
+    const ls = document.getElementById("loading-screen");
+    ls.classList.add("fade-out");
+    setTimeout(() => {
+      ls.style.display = "none";
+      document.getElementById("loading-bg").style.display = "none";
+      loadingHidden = true;
+      hasPanned = false;
+    }, 3000);
+  });
 }, 4000);
-
-// t=12s: fade logo (2s)
-setTimeout(() => {
-  document.getElementById("loading-screen").classList.add("fade-out");
-}, 12000);
-
-// t=14s: remove both layers
-setTimeout(() => {
-  document.getElementById("loading-screen").style.display = "none";
-  document.getElementById("loading-bg").style.display = "none";
-  loadingHidden = true;
-}, 14000);
-
-// t=15s: allow GPS watchPosition
-setTimeout(() => { hasPanned = false; }, 15000);
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 loadArea();
