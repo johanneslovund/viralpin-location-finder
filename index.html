@@ -722,15 +722,9 @@ function scheduleRender() {
 }
 
 function renderClusters() {
-  clusterLayer.clearLayers();
   if (!allPhotos.length) return;
   const bounds = map.getBounds(), zoom = map.getZoom();
-
-  // Skip re-render if bounds and zoom haven't changed significantly
-  const boundsKey = `${bounds.getSouth().toFixed(2)},${bounds.getNorth().toFixed(2)},${bounds.getWest().toFixed(2)},${bounds.getEast().toFixed(2)}`;
-  if (boundsKey === lastRenderBoundsKey && zoom === lastRenderZoom) return;
-  lastRenderBoundsKey = boundsKey;
-  lastRenderZoom = zoom;
+  clusterLayer.clearLayers();
 
   const buf = Math.max(cellSize(zoom) * 1.5, 0.05);
   const S = bounds.getSouth()-buf, N = bounds.getNorth()+buf,
@@ -769,11 +763,6 @@ function dynamicHeatOpts() {
 }
 
 function buildHeatmap() {
-  const now = Date.now();
-  if (now - heatLastRun < 300) {
-    scheduleHeatmap(); return;
-  }
-  heatLastRun = now;
 
   if (!showHeat || !allPhotos.length) {
     if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
