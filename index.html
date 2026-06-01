@@ -60,39 +60,36 @@
       will-change: transform;
     }
 
-    /* Heatmap toggle — visually separate from main panel */
-    #heatmap-toggle-wrap {
-      display: flex; flex-direction: column; align-items: center; gap: 6px;
-      position: relative;
-    }
-
-    /* Sensitivity popup (appears above the heatmap button on long-press) */
-    #heat-settings {
-      display: none; flex-direction: column; gap: 6px;
-      background: var(--panel); border: 1px solid #1e2d50;
-      border-radius: 12px; padding: 10px 16px;
-      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-      min-width: 210px; animation: locFadeIn 0.2s ease;
-    }
-    #heat-settings.open { display: flex; }
-    #heat-intensity-row {
+    /* Heatmap row — inside map-bottom, same style as popularity */
+    #heat-section {
       display: flex; align-items: center; gap: 10px;
+      padding: 7px 16px 6px; border-bottom: 1px solid #101830;
     }
-    .hs-title { font-size: 0.65rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
-    #heat-value { font-size: 0.67rem; color: #6878b0; font-weight: 600; min-width: 14px; text-align: center; }
-    #heat-btn {
-      background: transparent; border: 1px solid #1e2d50; color: #5868a0;
-      border-radius: 20px; padding: 6px 16px; font-size: 0.76rem; font-weight: 500;
-      cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-      transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s;
-      min-height: 34px; -webkit-user-select: none; user-select: none;
-      background: var(--panel);
+    #heat-toggle-label {
+      font-size: 0.65rem; font-weight: 700; color: var(--muted);
+      letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap;
+      cursor: pointer; -webkit-user-select: none; user-select: none;
+      transition: color 0.15s;
     }
-    #heat-btn.active {
-      background: #243896; border-color: #4d6fe8; color: #d8e4ff;
-      font-weight: 600; box-shadow: 0 0 14px rgba(77,111,232,0.35);
+    #heat-toggle-label.active { color: #a8bfff; }
+    #heat-slider {
+      flex: 1; appearance: none; -webkit-appearance: none;
+      height: 2px; background: #1a2550; border-radius: 2px; outline: none; cursor: pointer;
+      touch-action: none;
     }
-    #heat-btn:active { opacity: 0.75; }
+    #heat-slider::-webkit-slider-thumb {
+      appearance: none; -webkit-appearance: none;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--accent); border: 2.5px solid #8aadff;
+      cursor: grab; box-shadow: 0 0 10px rgba(58,90,232,0.4);
+    }
+    #heat-slider::-moz-range-thumb {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--accent); border: 2.5px solid #8aadff; cursor: grab;
+    }
+    #heat-slider:disabled { opacity: 0.3; cursor: default; }
+    #heat-slider:disabled::-webkit-slider-thumb { cursor: default; }
+    #heat-value { font-size: 0.67rem; color: #6878b0; font-weight: 600; white-space: nowrap; min-width: 14px; text-align: right; }
 
     /* Main panel: slider + tags */
     #map-bottom {
@@ -170,11 +167,11 @@
     .tag-pill:active { opacity: 0.7; }
     .tag-pill.active { background: var(--pill-active-bg); border-color: var(--pill-active-border); color: #c0d0ff; font-weight: 600; }
 
-    /* Search pill — always visible, pinned right, never shrinks */
+    /* Search pill — always visible, pinned LEFT, never shrinks */
     #search-pill-wrap {
       flex: 0 0 auto; display: flex; align-items: center;
-      padding: 7px 10px 7px 8px;
-      border-left: 1px solid #182040;
+      padding: 7px 8px 7px 10px;
+      border-right: 1px solid #182040;
     }
     #search-pill {
       display: flex; align-items: center; gap: 5px;
@@ -327,21 +324,8 @@
       <button id="nav-stop">✕ Stop</button>
     </div>
 
-    <!-- Bottom: heatmap toggle (separate) + main panel -->
+    <!-- Bottom panel -->
     <div id="bottom-container">
-
-      <div id="heatmap-toggle-wrap">
-        <div id="heat-settings">
-          <div id="heat-intensity-row">
-            <span class="hs-title">Heatmap Intensity</span>
-            <button class="slider-adj" id="heat-minus">−</button>
-            <span id="heat-value">3</span>
-            <button class="slider-adj" id="heat-plus">+</button>
-          </div>
-        </div>
-        <button id="heat-btn" class="active">Heatmap</button>
-      </div>
-
       <div id="map-bottom">
 
         <div id="pop-section">
@@ -350,6 +334,14 @@
           <input type="range" id="engagement-slider" min="1" max="60" value="30" step="1" />
           <button class="slider-adj" id="slider-plus">+</button>
           <span id="slider-value">Top 30</span>
+        </div>
+
+        <div id="heat-section">
+          <span id="heat-toggle-label" class="active">Heatmap</span>
+          <button class="slider-adj" id="heat-minus">−</button>
+          <input type="range" id="heat-slider" min="1" max="5" value="3" step="1" />
+          <button class="slider-adj" id="heat-plus">+</button>
+          <span id="heat-value">3</span>
         </div>
 
         <div id="search-panel">
@@ -365,18 +357,18 @@
         </div>
 
         <div id="tag-row">
+          <div id="search-pill-wrap">
+            <div id="search-pill">
+              <span class="search-icon">🔍</span>
+              <span class="search-label">Search</span>
+            </div>
+          </div>
           <div id="tag-bar">
             <button class="tag-pill active" data-value="nature,landscape">Nature</button>
             <button class="tag-pill" data-value="fjord">Fjords</button>
             <button class="tag-pill" data-value="mountain">Mountains</button>
             <button class="tag-pill" data-value="aurora,northernlights">Northern Lights</button>
             <button class="tag-pill" data-value="waterfall">Waterfalls</button>
-          </div>
-          <div id="search-pill-wrap">
-            <div id="search-pill">
-              <span class="search-icon">🔍</span>
-              <span class="search-label">Search</span>
-            </div>
           </div>
         </div>
 
@@ -562,56 +554,34 @@ function scheduleHeatmap() {
 
 // ─── Heatmap intensity ────────────────────────────────────────────────────────
 let heatRadius = 30, heatBlur = 24;
-let heatIntensity = 3; // 1–5
+let heatIntensity = 3;
 
-const heatSettings = document.getElementById("heat-settings");
+const heatSlider      = document.getElementById("heat-slider");
+const heatValueLabel  = document.getElementById("heat-value");
+const heatToggleLabel = document.getElementById("heat-toggle-label");
 
 function applyHeatIntensity(v) {
   heatIntensity = Math.max(1, Math.min(5, v));
-  document.getElementById("heat-value").textContent = heatIntensity;
-  heatRadius = 10 + heatIntensity * 8;  // 18 → 50
-  heatBlur   = 8  + heatIntensity * 6;  // 14 → 38
+  heatSlider.value        = heatIntensity;
+  heatValueLabel.textContent = heatIntensity;
+  heatRadius = 10 + heatIntensity * 8;
+  heatBlur   = 8  + heatIntensity * 6;
   buildHeatmap();
 }
 
+heatSlider.addEventListener("input", () => applyHeatIntensity(parseInt(heatSlider.value)));
 document.getElementById("heat-minus").addEventListener("click", () => applyHeatIntensity(heatIntensity - 1));
 document.getElementById("heat-plus").addEventListener("click",  () => applyHeatIntensity(heatIntensity + 1));
 
-// Long-press to open sensitivity panel
-let longPressTimer = null;
-const heatBtn = document.getElementById("heat-btn");
-
-function startLongPress() {
-  cancelLongPress();
-  longPressTimer = setTimeout(() => {
-    heatSettings.classList.toggle("open");
-  }, 500);
-}
-function cancelLongPress() {
-  clearTimeout(longPressTimer); longPressTimer = null;
-}
-
-heatBtn.addEventListener("mousedown",   startLongPress);
-heatBtn.addEventListener("touchstart",  startLongPress, { passive: true });
-heatBtn.addEventListener("mouseup",     cancelLongPress);
-heatBtn.addEventListener("mouseleave",  cancelLongPress);
-heatBtn.addEventListener("touchend",    cancelLongPress);
-heatBtn.addEventListener("touchcancel", cancelLongPress);
-
-// Normal click = toggle heatmap on/off (only if not a long-press)
-heatBtn.addEventListener("click", () => {
-  if (heatSettings.classList.contains("open")) return; // long-press opened panel, ignore click
+// Clicking the "Heatmap" label toggles the layer on/off
+heatToggleLabel.addEventListener("click", () => {
   showHeat = !showHeat;
-  heatBtn.classList.toggle("active", showHeat);
+  heatToggleLabel.classList.toggle("active", showHeat);
+  heatSlider.disabled = !showHeat;
+  document.getElementById("heat-minus").disabled = !showHeat;
+  document.getElementById("heat-plus").disabled  = !showHeat;
   buildHeatmap();
-  if (!showHeat) { labelLayer.clearLayers(); }
-});
-
-// Close sensitivity panel when clicking elsewhere
-document.addEventListener("click", e => {
-  if (!document.getElementById("heatmap-toggle-wrap").contains(e.target)) {
-    heatSettings.classList.remove("open");
-  }
+  if (!showHeat) labelLayer.clearLayers();
 });
 
 // ─── Top-5 location labels ────────────────────────────────────────────────────
