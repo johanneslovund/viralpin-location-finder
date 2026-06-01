@@ -1235,35 +1235,43 @@ function addCamMarker(lat, lng, title, imgUrl, type, extUrl) {
     .addTo(camLayer);
 }
 
-async function loadVegvesen(bounds) {
-  const W=bounds.getWest().toFixed(4), S=bounds.getSouth().toFixed(4);
-  const E=bounds.getEast().toFixed(4), N=bounds.getNorth().toFixed(4);
-  // Try v3 first, fall back to v2
-  const urls = [
-    `https://nvdbapiles-v3.atlas.vegvesen.no/vegobjekter/95?srid=wgs84&kartutsnitt=${W},${S},${E},${N}&segmentering=false&antall=200`,
-    `https://nvdbapiles.atlas.vegvesen.no/vegobjekter/95?srid=wgs84&kartutsnitt=${W},${S},${E},${N}&segmentering=false&antall=200`
-  ];
-  for (const url of urls) {
-    try {
-      const r = await fetch(url, { headers:{ 'Accept':'application/json' } });
-      if (!r.ok) continue;
-      const d = await r.json();
-      const cams = d.objekter || [];
-      if (!cams.length && urls.indexOf(url) < urls.length-1) continue; // try next
-      for (const obj of cams) {
-        // Handle both "POINT (lon lat)" and "POINT(lon lat)"
-        const wkt = obj.lokasjon?.geometri?.wkt || "";
-        const m = wkt.match(/POINT\s*\(\s*([0-9.-]+)\s+([0-9.-]+)\s*\)/);
-        if (!m) continue;
-        const lng=parseFloat(m[1]), lat=parseFloat(m[2]);
-        const name = obj.egenskaper?.find(e=>e.navn==="Navn")?.verdi || `Kamera ${obj.id}`;
-        const imgUrl = `https://webkamera.atlas.vegvesen.no/public/kamera?id=${obj.id}&ts=${Date.now()}`;
-        addCamMarker(lat, lng, name, imgUrl, "road",
-          `https://www.vegvesen.no/trafikk-og-vegkart/#Kamera?kameraId=${obj.id}`);
-      }
-      break;
-    } catch(e) { console.warn("Vegvesen:", e.message); }
+// Fetch all Norwegian road cameras once — only ~400, avoid bbox CORS issues
+let vegvesenCacheAll = null;
+async function getVegvesenAll() {
+  if (vegvesenCacheAll) return vegvesenCacheAll;
+  let all = [];
+  let start = 0;
+  while (true) {
+    const r = await fetch(
+      `https://nvdbapiles-v3.atlas.vegvesen.no/vegobjekter/95?srid=wgs84&inkluder=lokasjon,egenskaper&antall=500&start=${start}`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+    if (!r.ok) break;
+    const d = await r.json();
+    all = all.concat(d.objekter || []);
+    if (!d.metadata?.neste?.start) break;
+    start = d.metadata.neste.start;
   }
+  vegvesenCacheAll = all;
+  return all;
+}
+
+async function loadVegvesen(bounds) {
+  try {
+    const all = await getVegvesenAll();
+    const S=bounds.getSouth(), N=bounds.getNorth(), W=bounds.getWest(), E=bounds.getEast();
+    for (const obj of all) {
+      const wkt = obj.lokasjon?.geometri?.wkt || "";
+      const m = wkt.match(/POINT\s*\(\s*([0-9.-]+)\s+([0-9.-]+)\s*\)/);
+      if (!m) continue;
+      const lng=parseFloat(m[1]), lat=parseFloat(m[2]);
+      if (lat<S||lat>N||lng<W||lng>E) continue; // filter to visible bounds client-side
+      const name = obj.egenskaper?.find(e=>e.navn==="Navn")?.verdi || `Kamera ${obj.id}`;
+      const imgUrl = `https://webkamera.atlas.vegvesen.no/public/kamera?id=${obj.id}&ts=${Date.now()}`;
+      addCamMarker(lat, lng, name, imgUrl, "road",
+        `https://www.vegvesen.no/trafikk-og-vegkart/#Kamera?kameraId=${obj.id}`);
+    }
+  } catch(e) { console.warn("Vegvesen:", e.message); }
 }
 
 async function loadWindy(bounds) {
@@ -1272,13 +1280,14 @@ async function loadWindy(bounds) {
   const N=bounds.getNorth().toFixed(4), E=bounds.getEast().toFixed(4);
   try {
     const r = await fetch(
-      `https://api.windy.com/api/webcams/v2/list/bbox/${S},${W},${N},${E}?show=webcams:location,images,player&limit=100`,
+      `https://api.windy.com/api/webcams/v2/list/bbox/${S},${W},${N},${E}?show=webcams:location,images,player&limit=100&key=${windyApiKey}`,
       { headers:{ 'x-windy-api-key': windyApiKey } }
     );
     if (!r.ok) { console.warn("Windy HTTP", r.status, await r.text()); return; }
     const d = await r.json();
     for (const cam of d.result?.webcams || []) {
-      const {lat, lon:lng} = cam.location;
+      const lat = cam.location.lat;
+      const lng = cam.location.lng ?? cam.location.lon; // API uses 'lng', not 'lon'
       const img = cam.images?.current?.preview || cam.images?.daylight?.preview || "";
       addCamMarker(lat, lng, cam.title, img, "scenic",
         `https://windy.com/webcams/${cam.webcamId}`);
@@ -1743,8 +1752,9 @@ async function fetchBox(bounds, pages=3) {
   } catch(e) { console.warn("fetchBox:", e.message); }
 }
 
-// Silently preload surrounding 5×5 grid
+// Silently preload surrounding 5×5 grid (Flickr only — Wikimedia uses its own tiling)
 function preloadSurrounding() {
+  if (currentSource !== "flickr") return;
   if (map.getZoom() < MIN_FETCH_ZOOM + 2) return;
   const b = map.getBounds();
   const W = b.getEast()-b.getWest(), H = b.getNorth()-b.getSouth();
