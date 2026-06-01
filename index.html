@@ -18,12 +18,12 @@
   <style>
     :root {
       --bg: #080d1a;
-      --panel: rgba(10,14,28,0.52);
-      --panel-blur: blur(22px) saturate(110%);
-      --border: rgba(180,200,255,0.09);
-      --border-strong: rgba(180,200,255,0.16);
-      --accent: #3a5ae8; --text: #c8ccdf;
-      --muted: #566078; --pill-active-bg: rgba(26,46,122,0.65); --pill-active-border: rgba(51,84,196,0.75);
+      --panel: rgba(6,12,32,0.52);
+      --panel-blur: blur(22px) saturate(105%);
+      --border: rgba(160,200,255,0.09);
+      --border-strong: rgba(160,200,255,0.16);
+      --accent: #2a50e0; --text: #c4ccdf;
+      --muted: #4e5e7a; --pill-active-bg: rgba(20,40,110,0.65); --pill-active-border: rgba(40,72,180,0.75);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
       --safe-left: env(safe-area-inset-left, 0px);
       --safe-right: env(safe-area-inset-right, 0px);
@@ -169,7 +169,7 @@
     /* Aurora legend — vertical bar on left */
     #aurora-legend {
       display: none; position: absolute; left: 14px;
-      bottom: calc(180px + env(safe-area-inset-bottom, 0px));
+      top: 50%; transform: translateY(-50%);
       z-index: 810; flex-direction: column; align-items: center; gap: 6px;
       background: var(--panel); border: 1px solid var(--border-strong);
       border-radius: 14px; padding: 10px 8px;
@@ -178,15 +178,26 @@
     }
     #aurora-legend.visible { display: flex; }
     #aurora-legend-bar {
-      width: 14px; height: 120px; border-radius: 7px;
+      width: 14px; height: 130px; border-radius: 7px; position: relative; overflow: hidden;
       background: linear-gradient(to bottom,
-        #cc00ff 0%, #4466ff 30%, #00ffaa 60%, #00aa44 85%, #001a08 100%);
-      box-shadow: 0 0 12px rgba(0,200,120,0.25);
+        #ff2200 0%, #ff6600 20%, #ffaa00 38%, #00ddff 58%, #00aa55 80%, #004422 100%);
+      box-shadow: 0 0 14px rgba(0,200,120,0.3);
+    }
+    /* Animated shimmer over the legend bar */
+    #aurora-legend-bar::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
+      animation: aurora-legend-wave 2.4s ease-in-out infinite;
+      border-radius: 7px;
+    }
+    @keyframes aurora-legend-wave {
+      0%   { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
     }
     .aurora-legend-labels {
-      position: absolute; left: 36px; top: 10px;
+      position: absolute; left: 28px; top: 10px;
       display: flex; flex-direction: column; justify-content: space-between;
-      height: 140px; font-size: 0.6rem; color: #7888b8; white-space: nowrap;
+      height: 150px; font-size: 0.6rem; color: #7888b8; white-space: nowrap;
     }
     #aurora-btn.active {
       background: linear-gradient(135deg, #004d1a, #00cc55);
@@ -399,10 +410,10 @@
     .loc-label {
       display: inline-block; white-space: nowrap; pointer-events: none;
       transform: translate(-50%, -100%); margin-top: -10px;
-      background: rgba(20,36,120,0.88); border: 1px solid #4d6fe8;
-      color: #d8e4ff; font-size: 0.72rem; font-weight: 700;
+      background: rgba(40,20,8,0.88); border: 1px solid #e8880a;
+      color: #ffe0a0; font-size: 0.72rem; font-weight: 700;
       padding: 4px 10px 4px 8px; border-radius: 7px;
-      box-shadow: 0 2px 14px rgba(58,90,232,0.35);
+      box-shadow: 0 2px 16px rgba(240,140,20,0.55), 0 0 28px rgba(255,120,0,0.25);
       letter-spacing: 0.02em;
       opacity: 0;
       animation: locFadeIn 0.45s ease forwards;
@@ -656,10 +667,10 @@
       <div style="position:relative">
         <div id="aurora-legend-bar"></div>
         <div class="aurora-legend-labels">
-          <span style="color:#dd66ff">Strong</span>
-          <span style="color:#6699ff">High</span>
-          <span style="color:#00ffaa">Mid</span>
-          <span style="color:#00cc44">Low</span>
+          <span style="color:#ff4422">Strong</span>
+          <span style="color:#ffaa00">High</span>
+          <span style="color:#00ddff">Mid</span>
+          <span style="color:#44cc88">Low</span>
         </div>
       </div>
     </div>
@@ -794,6 +805,7 @@ function scheduleRender() {
 
 function renderClusters() {
   if (!allPhotos.length) return;
+  const bounds = map.getBounds(), zoom = map.getZoom();
 
   const buf = Math.max(cellSize(zoom) * 1.5, 0.05);
   const S = bounds.getSouth()-buf, N = bounds.getNorth()+buf,
@@ -907,11 +919,13 @@ let auroraLayer  = null;
 let auroraTimer  = null;
 
 const AURORA_GRADIENT = {
-  0:    "#001a08",
-  0.25: "#00aa44",
-  0.55: "#00ffaa",
-  0.78: "#4466ff",
-  1:    "#cc00ff"
+  0:    "#001408",
+  0.2:  "#006633",
+  0.42: "#00ccaa",
+  0.62: "#0088ff",
+  0.78: "#ff8800",
+  0.92: "#ff2200",
+  1:    "#ff0000"
 };
 const auroraBtn = document.getElementById("aurora-btn");
 
@@ -1089,7 +1103,7 @@ async function updateLocationLabels() {
   }
   const top5 = Array.from(grid.values())
     .sort((a,b) => b.views - a.views)
-    .slice(0, 3)
+    .slice(0, 2)
     .map(g => ({ lat:g.lat/g.n, lng:g.lng/g.n }));
 
   await fadeOutLabels();
