@@ -1235,23 +1235,20 @@ function addCamMarker(lat, lng, title, imgUrl, type, extUrl) {
     .addTo(camLayer);
 }
 
-// Fetch all Norwegian road cameras once — only ~400, avoid bbox CORS issues
+// Fetch all Norwegian road cameras (type 163) from NVDB V4, cache for the session
 let vegvesenCacheAll = null;
 async function getVegvesenAll() {
   if (vegvesenCacheAll) return vegvesenCacheAll;
-  let all = [];
-  let start = 0;
-  while (true) {
-    const r = await fetch(
-      `https://nvdbapiles-v3.atlas.vegvesen.no/vegobjekter/95?srid=wgs84&antall=500&start=${start}`,
-      { headers: { 'Accept': 'application/vnd.vegvesen.nvdb-v3+json, application/json' } }
-    );
+  let all = [], nextStart = null;
+  do {
+    const url = `https://nvdbapiles.atlas.vegvesen.no/vegobjekter/163?srid=wgs84&inkluder=lokasjon,egenskaper&antall=500`
+      + (nextStart ? `&start=${nextStart}` : "");
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
     if (!r.ok) break;
     const d = await r.json();
     all = all.concat(d.objekter || []);
-    if (!d.metadata?.neste?.start) break;
-    start = d.metadata.neste.start;
-  }
+    nextStart = d.metadata?.neste?.start || null;
+  } while (nextStart);
   vegvesenCacheAll = all;
   return all;
 }
@@ -1261,12 +1258,15 @@ async function loadVegvesen(bounds) {
     const all = await getVegvesenAll();
     const S=bounds.getSouth(), N=bounds.getNorth(), W=bounds.getWest(), E=bounds.getEast();
     for (const obj of all) {
+      // NVDB WKT: "POINT Z (latitude longitude elevation)" — lat comes first
       const wkt = obj.lokasjon?.geometri?.wkt || "";
-      const m = wkt.match(/POINT\s*\(\s*([0-9.-]+)\s+([0-9.-]+)\s*\)/);
+      const m = wkt.match(/POINT(?:\s+Z)?\s*\(\s*([0-9.-]+)\s+([0-9.-]+)/);
       if (!m) continue;
-      const lng=parseFloat(m[1]), lat=parseFloat(m[2]);
-      if (lat<S||lat>N||lng<W||lng>E) continue; // filter to visible bounds client-side
-      const name = obj.egenskaper?.find(e=>e.navn==="Navn")?.verdi || `Kamera ${obj.id}`;
+      const lat=parseFloat(m[1]), lng=parseFloat(m[2]); // lat first in NVDB WKT
+      if (lat<S||lat>N||lng<W||lng>E) continue;
+      const name = obj.egenskaper?.find(e=>e.navn==="Driftsmerking")?.verdi
+                || obj.egenskaper?.find(e=>e.navn==="Navn")?.verdi
+                || `Vegkamera ${obj.id}`;
       const imgUrl = `https://webkamera.atlas.vegvesen.no/public/kamera?id=${obj.id}&ts=${Date.now()}`;
       addCamMarker(lat, lng, name, imgUrl, "road",
         `https://www.vegvesen.no/trafikk-og-vegkart/#Kamera?kameraId=${obj.id}`);
