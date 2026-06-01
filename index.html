@@ -689,7 +689,7 @@ overlayPane.style.cssText = "z-index:250;pointer-events:none;background:rgba(8,2
 let allPhotos    = [];
 let photoById    = new Map();
 let heatLayer    = null;
-let clusterLayer = L.layerGroup();
+let clusterLayer = L.layerGroup().addTo(map);
 map.createPane("labelPane").style.zIndex = "640";
 let labelLayer   = L.layerGroup().addTo(map);
 let routeLayer   = null;
@@ -748,9 +748,8 @@ function buildClusters(photos, zoom) {
   });
 }
 
-// ─── Render clusters (double-buffered to prevent flicker) ────────────────────
+// ─── Render clusters ─────────────────────────────────────────────────────────
 let rafPending = false;
-let lastRenderSig = "";
 
 function scheduleRender() {
   if (rafPending) return;
@@ -760,10 +759,6 @@ function scheduleRender() {
 
 function renderClusters() {
   if (!allPhotos.length) return;
-  const bounds = map.getBounds(), zoom = map.getZoom();
-  const sig = `${zoom}|${topN}|${allPhotos.length}|${bounds.getSouth().toFixed(1)},${bounds.getNorth().toFixed(1)},${bounds.getWest().toFixed(1)},${bounds.getEast().toFixed(1)}`;
-  if (sig === lastRenderSig) return;
-  lastRenderSig = sig;
 
   const buf = Math.max(cellSize(zoom) * 1.5, 0.05);
   const S = bounds.getSouth()-buf, N = bounds.getNorth()+buf,
@@ -1425,7 +1420,6 @@ function clearAll() {
   labelLayer.clearLayers(); ++labelGen;
   if (heatLayer) { map.removeLayer(heatLayer); heatLayer=null; }
   userMovedSlider=false;
-  lastRenderSig="";
 }
 
 // ─── Navigation (OSRM) ───────────────────────────────────────────────────────
