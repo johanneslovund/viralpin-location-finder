@@ -36,14 +36,15 @@
       position: fixed; inset: 0; z-index: 10000;
       background: #080d1a;
       display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 16px;
-      transition: opacity 0.6s ease;
+      flex-direction: column; gap: 24px;
+      transition: opacity 0.8s ease;
     }
     #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+    #loading-logo { width: min(280px, 70vw); height: auto; }
     .loading-spinner {
-      width: 48px; height: 48px;
-      border: 3px solid #1a2550;
-      border-top-color: #3a5ae8;
+      width: 36px; height: 36px;
+      border: 2px solid #1a2550;
+      border-top-color: #00cc88;
       border-radius: 50%;
       animation: spin 0.9s linear infinite;
     }
@@ -547,8 +548,8 @@
 
 <!-- Loading screen -->
 <div id="loading-screen">
+  <img id="loading-logo" src="logo.png" alt="CinePin" />
   <div class="loading-spinner"></div>
-  <div class="loading-text">Loading…</div>
 </div>
 
 <div class="main">
@@ -775,8 +776,7 @@ function renderClusters() {
   inView.sort((a,b) => b.views - a.views);
   const filtered = inView.slice(0, topN);
 
-  // Build new layer first, then swap — eliminates the blank frame between clear and re-add
-  const next = L.layerGroup();
+  clusterLayer.clearLayers();
   for (const cl of buildClusters(filtered, zoom)) {
     const single = cl.photos.length === 1;
     const sz = single ? 44 : 56;
@@ -787,11 +787,8 @@ function renderClusters() {
     });
     L.marker([cl.lat,cl.lng],{icon})
       .on("click",()=>{ if(cl.photos.length===1) openLightbox(cl.best); else map.flyTo([cl.lat,cl.lng],Math.min(zoom+2,16),{duration:0.5}); })
-      .addTo(next);
+      .addTo(clusterLayer);
   }
-  next.addTo(map);       // new markers appear
-  clusterLayer.remove(); // old markers removed — no blank frame
-  clusterLayer = next;
 }
 
 function fmt(n) { return n>=1000?(n/1000).toFixed(1).replace(".0","")+"k":String(n); }
@@ -1246,12 +1243,17 @@ function preloadSurrounding() {
 
 // ─── Loading screen ───────────────────────────────────────────────────────────
 let loadingHidden = false;
+const loadStartTime = Date.now();
 function hideLoadingScreen() {
   if (loadingHidden) return;
   loadingHidden = true;
+  const elapsed = Date.now() - loadStartTime;
+  const wait = Math.max(0, 5000 - elapsed);
   const ls = document.getElementById("loading-screen");
-  ls.classList.add("fade-out");
-  setTimeout(() => { ls.style.display = "none"; }, 650);
+  setTimeout(() => {
+    ls.classList.add("fade-out");
+    setTimeout(() => { ls.style.display = "none"; }, 850);
+  }, wait);
 }
 
 // ─── Initial area load ────────────────────────────────────────────────────────
