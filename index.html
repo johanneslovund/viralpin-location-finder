@@ -1210,7 +1210,13 @@ async function flickrFetch(extra) {
     ...(currentTag ? {tags:currentTag,tag_mode:"any"} : {}),
     ...extra,
   });
-  const r = await fetch(`https://www.flickr.com/services/rest/?${p}`);
+  // Try api.flickr.com first (less likely to be blocked by content filters)
+  let r;
+  try {
+    r = await fetch(`https://api.flickr.com/services/rest/?${p}`, { mode: 'cors', cache: 'no-store' });
+  } catch {
+    r = await fetch(`https://www.flickr.com/services/rest/?${p}`, { mode: 'cors', cache: 'no-store' });
+  }
   if (!r.ok) throw new Error("Flickr HTTP " + r.status);
   const d = await r.json();
   if (d.stat !== "ok") throw new Error(d.message || "Flickr error");
@@ -1316,7 +1322,12 @@ async function loadArea() {
     preloadSurrounding();
   } catch(err) {
     hideLoadingScreen();
-    status.textContent = `⚠ ${err.message}`;
+    const isNetwork = err.message.toLowerCase().includes("load") || err.message.toLowerCase().includes("network") || err.message.toLowerCase().includes("fetch");
+    if (isNetwork) {
+      status.innerHTML = `⚠ Network blocked — try disabling content blockers for this site, then <a href="javascript:loadArea()" style="color:#7aadff">tap to retry</a>`;
+    } else {
+      status.textContent = `⚠ ${err.message}`;
+    }
   }
 }
 
