@@ -37,16 +37,21 @@
     }
 
     /* ── Loading screen ── */
+    #loading-bg {
+      position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+      background: #0a0f1e;
+      transition: opacity 3s ease;
+    }
+    #loading-bg.fade-out { opacity: 0; }
     #loading-screen {
       position: fixed; inset: 0; z-index: 10000;
       background: transparent;
       display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 24px;
       pointer-events: none;
-      transition: opacity 0.8s ease;
+      transition: opacity 2s ease;
     }
     #loading-screen.fade-out { opacity: 0; }
-    #loading-logo { width: min(260px, 65vw); height: auto; filter: drop-shadow(0 2px 20px rgba(0,0,0,0.8)); }
+    #loading-logo { width: min(260px, 65vw); height: auto; filter: drop-shadow(0 2px 24px rgba(0,0,0,0.9)); }
     .loading-spinner {
       width: 36px; height: 36px;
       border: 2px solid #1a2550;
@@ -612,8 +617,8 @@
 <!-- Loading screen -->
 <div id="loading-screen">
   <img id="loading-logo" src="logo.png" alt="CinePin" />
-  <div class="loading-spinner"></div>
 </div>
+<div id="loading-bg"></div>
 
 <div class="main">
   <div id="map">
@@ -2181,10 +2186,19 @@ L.DomEvent.disableScrollPropagation(locSearchWrap);
 L.DomEvent.disableClickPropagation(locSearchWrap);
 
 // ─── Intro animation ──────────────────────────────────────────────────────────
-// Block GPS watchPosition pan during intro
-hasPanned = true;
+// Timeline:
+//  t=0s   : dark bg visible, logo visible, bg starts fading (3s)
+//  t=3s   : bg transparent, logo floating on globe
+//  t=4s   : zoom animation starts (10s total)
+//  t=12s  : logo starts fading (2s fade, finishes at t=14s)
+//  t=14s  : everything hidden, intro done
 
-// Try to get GPS in the background while the 4s logo shows
+hasPanned = true; // block GPS watchPosition during intro
+
+// Fade background immediately (3 s)
+document.getElementById("loading-bg").classList.add("fade-out");
+
+// Try GPS during the 4s wait
 let introTarget = null;
 if ("geolocation" in navigator) {
   navigator.geolocation.getCurrentPosition(
@@ -2194,24 +2208,27 @@ if ("geolocation" in navigator) {
   );
 }
 
-// After 4 s: fly to GPS if acquired, else Norway overview
+// t=4s: start 10s zoom
 setTimeout(() => {
   const target = introTarget || [65.0, 14.0];
   const zoom   = introTarget ? 13 : 5.5;
-  map.flyTo(target, zoom, { duration: 7, easeLinearity: 0.05 });
-
-  // Start fading loading screen 3 s into the fly
-  setTimeout(() => {
-    const ls = document.getElementById("loading-screen");
-    ls.style.transition = "opacity 3.5s ease-in";
-    ls.style.opacity = "0";
-    ls.style.pointerEvents = "none";
-    setTimeout(() => { ls.style.display = "none"; loadingHidden = true; }, 3600);
-  }, 3000);
+  map.flyTo(target, zoom, { duration: 10, easeLinearity: 0.04 });
 }, 4000);
 
-// Allow GPS watchPosition after intro (~12 s total)
-setTimeout(() => { hasPanned = false; }, 12000);
+// t=12s: fade logo (2s)
+setTimeout(() => {
+  document.getElementById("loading-screen").classList.add("fade-out");
+}, 12000);
+
+// t=14s: remove both layers
+setTimeout(() => {
+  document.getElementById("loading-screen").style.display = "none";
+  document.getElementById("loading-bg").style.display = "none";
+  loadingHidden = true;
+}, 14000);
+
+// t=15s: allow GPS watchPosition
+setTimeout(() => { hasPanned = false; }, 15000);
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 loadArea();
