@@ -707,7 +707,7 @@ function buildClusters(photos, zoom) {
   });
 }
 
-// ─── Render clusters (rAF-gated, signature-skipped) ──────────────────────────
+// ─── Render clusters (double-buffered to prevent flicker) ────────────────────
 let rafPending = false;
 let lastRenderSig = "";
 
@@ -720,11 +720,9 @@ function scheduleRender() {
 function renderClusters() {
   if (!allPhotos.length) return;
   const bounds = map.getBounds(), zoom = map.getZoom();
-  // Skip if nothing meaningful changed (0.1° resolution, same zoom & topN)
   const sig = `${zoom}|${topN}|${allPhotos.length}|${bounds.getSouth().toFixed(1)},${bounds.getNorth().toFixed(1)},${bounds.getWest().toFixed(1)},${bounds.getEast().toFixed(1)}`;
   if (sig === lastRenderSig) return;
   lastRenderSig = sig;
-  clusterLayer.clearLayers();
 
   const buf = Math.max(cellSize(zoom) * 1.5, 0.05);
   const S = bounds.getSouth()-buf, N = bounds.getNorth()+buf,
@@ -737,18 +735,23 @@ function renderClusters() {
   inView.sort((a,b) => b.views - a.views);
   const filtered = inView.slice(0, topN);
 
+  // Build new layer first, then swap — eliminates the blank frame between clear and re-add
+  const next = L.layerGroup();
   for (const cl of buildClusters(filtered, zoom)) {
     const single = cl.photos.length === 1;
     const sz = single ? 44 : 56;
     const icon = L.divIcon({
       className: "",
-      html: `<div class="cm${single?" single":""}"><img class="thumb" src="${cl.best.thumb}" width="${sz}" height="${sz}" loading="lazy" decoding="async"/>${!single?`<span class="badge">${fmt(cl.photos.length)}</span>`:""}</div>`,
+      html: `<div class="cm${single?" single":""}"><img class="thumb" src="${cl.best.thumb}" width="${sz}" height="${sz}"/>${!single?`<span class="badge">${fmt(cl.photos.length)}</span>`:""}</div>`,
       iconSize: [sz,sz+10], iconAnchor: [sz/2,sz+10],
     });
     L.marker([cl.lat,cl.lng],{icon})
       .on("click",()=>{ if(cl.photos.length===1) openLightbox(cl.best); else map.flyTo([cl.lat,cl.lng],Math.min(zoom+2,16),{duration:0.5}); })
-      .addTo(clusterLayer);
+      .addTo(next);
   }
+  next.addTo(map);       // new markers appear
+  clusterLayer.remove(); // old markers removed — no blank frame
+  clusterLayer = next;
 }
 
 function fmt(n) { return n>=1000?(n/1000).toFixed(1).replace(".0","")+"k":String(n); }
