@@ -1356,11 +1356,11 @@ async function wikimediaFetchBounds(bounds) {
   const geoMap = {};
   hits.forEach(h => { geoMap[h.title] = { lat: h.lat, lng: h.lon }; });
 
-  // 2. Batch imageinfo (thumbnail + size for quality filter)
+  // 2. Batch imageinfo + pageviews (last 30 days) in one request
   const info = await fetch(`https://commons.wikimedia.org/w/api.php?${new URLSearchParams({
     action:'query', titles: hits.map(h => h.title).join('|'),
-    prop:'imageinfo', iiprop:'url|size|timestamp', iiurlwidth:'300',
-    format:'json', origin:'*'
+    prop:'imageinfo|pageviews', iiprop:'url|size|timestamp', iiurlwidth:'300',
+    pvipdays: 30, format:'json', origin:'*'
   })}`).then(r => r.json());
 
   const results = [];
@@ -1373,13 +1373,16 @@ async function wikimediaFetchBounds(bounds) {
     if (!ii.url?.match(/\.(jpe?g)$/i)) continue;
     const geo = geoMap[page.title];
     if (!geo) continue;
+    // Real page-view count (30-day sum); fall back to megapixels if unavailable
+    const pageViews = Object.values(page.pageviews || {}).reduce((s, v) => s + (v || 0), 0);
+    const views = pageViews || Math.round((ii.width||0) * (ii.height||0) / 1e6);
     const clean = page.title.replace(/^File:/,'').replace(/\.[^.]+$/,'').replace(/_/g,' ');
     results.push({
       id: `wm_${page.pageid}`,
       title: clean, lat: geo.lat, lng: geo.lng,
       thumb:  ii.thumburl || ii.url,
       medium: ii.url, large: ii.url,
-      owner: 'commons', views: (ii.width||0) * (ii.height||0) / 1e6, // Mpx as proxy
+      owner: 'commons', views,
       url: `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title)}`
     });
   }
