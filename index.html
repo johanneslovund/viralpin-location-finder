@@ -2187,22 +2187,43 @@ L.DomEvent.disableClickPropagation(locSearchWrap);
 
 // ─── Intro animation ──────────────────────────────────────────────────────────
 // Timeline:
-//  t=0s   : dark bg visible, logo visible, bg starts fading (3s)
-//  t=3s   : bg transparent, logo floating on globe
-//  t=4s   : zoom animation starts (10s total)
-//  t=12s  : logo starts fading (2s fade, finishes at t=14s)
-//  t=14s  : everything hidden, intro done
+//  t=0–3s : dark bg + logo — static hold
+//  t=3–6s : background fades out (3s), logo stays on globe
+//  t=4s   : zoom starts (10s)
+//  t=12s  : logo fades (2s)
+//  t=14s  : done
 
 hasPanned = true; // block GPS watchPosition during intro
 
-// Fade background immediately (3 s)
-document.getElementById("loading-bg").classList.add("fade-out");
+// Background starts fading at t=3s (holds for 3s first)
+setTimeout(() => {
+  document.getElementById("loading-bg").classList.add("fade-out");
+}, 3000);
 
-// Try GPS during the 4s wait
+// GPS prefetch — fetch photos for user location as soon as signal arrives,
+// even while the animation is still running
+async function prefetchForLocation(lat, lng) {
+  const buf = 0.12; // ~13km bounding box
+  const bbox = `${(lng-buf).toFixed(4)},${(lat-buf).toFixed(4)},${(lng+buf).toFixed(4)},${(lat+buf).toFixed(4)}`;
+  try {
+    for (let p = 1; p <= 3; p++) {
+      const pg = await flickrFetch({ bbox, page: p });
+      for (const ph of pg.photo) ingestPhoto(ph);
+      if (p === 1) { buildHeatmap(); rescaleSlider(); renderClusters(); }
+      else { scheduleHeatmap(); }
+      if (p >= pg.pages) break;
+    }
+    scheduleRender();
+  } catch(e) { console.warn("GPS prefetch:", e); }
+}
+
 let introTarget = null;
 if ("geolocation" in navigator) {
   navigator.geolocation.getCurrentPosition(
-    pos => { introTarget = [pos.coords.latitude, pos.coords.longitude]; },
+    pos => {
+      introTarget = [pos.coords.latitude, pos.coords.longitude];
+      prefetchForLocation(pos.coords.latitude, pos.coords.longitude);
+    },
     () => {},
     { timeout: 3800, maximumAge: 60000, enableHighAccuracy: false }
   );
