@@ -29,40 +29,29 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: var(--bg); color: var(--text);
-      display: flex; flex-direction: column;
-      padding-bottom: var(--safe-bottom);
     }
 
-    /* ── Header ── */
-    header {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 16px 10px calc(16px + var(--safe-left));
-      padding-right: calc(16px + var(--safe-right));
-      background: #0a0f1e; border-bottom: 1px solid #151d35;
-      flex-shrink: 0; z-index: 10; min-height: 48px;
-    }
-    header h1 { font-size: 0.95rem; font-weight: 700; color: #dde2f5; letter-spacing: -0.01em; }
-    header h1 span { color: #4d7fff; }
-    #count-badge { font-size: 0.68rem; color: #4a5480; background: #111828; border-radius: 20px; padding: 2px 9px; }
-    .hdr-controls { display: flex; gap: 8px; margin-left: auto; align-items: center; }
-    .hdr-btn {
-      background: #111828; border: 1px solid #1e2a48; color: #8890b8;
-      border-radius: 8px; padding: 7px 14px; font-size: 0.78rem;
-      cursor: pointer; font-weight: 500; min-height: 36px; min-width: 80px;
-      -webkit-user-select: none; user-select: none;
-    }
-    .hdr-btn:active { opacity: 0.7; }
-    .btn-primary { background: #1a2e7a; border-color: #2a4aaf; color: #a8bfff; }
-
-    /* ── Map fills remaining space ── */
-    .main { flex: 1; position: relative; overflow: hidden; }
+    /* ── Map fills full viewport ── */
+    .main { position: fixed; inset: 0; overflow: hidden; }
     #map { width: 100%; height: 100%; z-index: 1; background: var(--bg); }
+
+    /* ── Floating title ── */
+    #map-title {
+      position: absolute;
+      top: calc(14px + env(safe-area-inset-top, 0px));
+      left: 50%; transform: translateX(-50%);
+      z-index: 800; pointer-events: none;
+      font-size: 0.95rem; font-weight: 700; color: #dde2f5;
+      white-space: nowrap; letter-spacing: -0.01em;
+      text-shadow: 0 1px 10px rgba(0,0,0,0.9), 0 0 30px rgba(0,0,0,0.6);
+    }
+    #map-title span { color: #4d7fff; }
     .leaflet-tile-pane { filter: saturate(0.65) brightness(0.97) hue-rotate(170deg); }
 
     /* ── Bottom container: two stacked floating panels ── */
     #bottom-container {
       position: absolute;
-      bottom: calc(20px + var(--safe-bottom));
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
       left: 50%; transform: translateX(-50%);
       z-index: 800;
       display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -171,12 +160,12 @@
 
     /* Tag row: scrollable pills + pinned Search */
     #tag-row {
-      display: flex; align-items: center; min-height: 48px;
+      display: flex; align-items: stretch; min-height: 48px; overflow: hidden;
     }
     #tag-bar {
       display: flex; gap: 7px; align-items: center; flex-wrap: nowrap;
       padding: 7px 10px; overflow-x: auto; -webkit-overflow-scrolling: touch;
-      scrollbar-width: none; flex: 1; min-width: 0;
+      scrollbar-width: none; flex: 1 1 0; min-width: 0;
     }
     #tag-bar::-webkit-scrollbar { display: none; }
     .tag-pill {
@@ -189,9 +178,10 @@
     .tag-pill:active { opacity: 0.7; }
     .tag-pill.active { background: var(--pill-active-bg); border-color: var(--pill-active-border); color: #c0d0ff; font-weight: 600; }
 
-    /* Search pill — always visible, pinned right of tag bar */
+    /* Search pill — always visible, pinned right, never shrinks */
     #search-pill-wrap {
-      flex-shrink: 0; padding: 7px 10px 7px 0;
+      flex: 0 0 auto; display: flex; align-items: center;
+      padding: 7px 10px 7px 8px;
       border-left: 1px solid #182040;
     }
     #search-pill {
@@ -323,24 +313,16 @@
     /* Responsive tweaks */
     @media (max-width: 560px) {
       #bottom-container { max-width: calc(100vw - 16px); }
-      header h1 { font-size: 0.85rem; }
-      #count-badge { display: none; }
+      #map-title { font-size: 0.82rem; }
     }
   </style>
 </head>
 <body>
 
-<header>
-  <span>📍</span>
-  <h1><span>ViralPin</span> - Location Map</h1>
-  <span id="count-badge"></span>
-  <div class="hdr-controls">
-    <button class="hdr-btn btn-primary" id="load-btn">Load Area</button>
-  </div>
-</header>
-
 <div class="main">
   <div id="map">
+
+    <div id="map-title"><span>ViralPin</span> - Location Finder</div>
 
     <!-- Navigation banner -->
     <div id="nav-panel">
@@ -536,15 +518,20 @@ function buildHeatmap() {
   if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
   if (!showHeat || !allPhotos.length) return;
 
+  // Only show points within the current viewport (with a small bleed buffer)
+  const bounds = map.getBounds();
+  const buf = 0.15;
+  const visPhotos = allPhotos.filter(p =>
+    p.lat >= bounds.getSouth() - buf && p.lat <= bounds.getNorth() + buf &&
+    p.lng >= bounds.getWest()  - buf && p.lng <= bounds.getEast()  + buf
+  );
+  if (!visPhotos.length) return;
+
   let maxV = 1;
-  for (const p of allPhotos) if (p.views > maxV) maxV = p.views;
+  for (const p of visPhotos) if (p.views > maxV) maxV = p.views;
   const logMax = Math.log10(maxV + 1);
 
-  const pts = new Array(allPhotos.length);
-  for (let i = 0; i < allPhotos.length; i++) {
-    const p = allPhotos[i];
-    pts[i] = [p.lat, p.lng, 0.08 + 0.92 * (Math.log10(p.views+1) / logMax)];
-  }
+  const pts = visPhotos.map(p => [p.lat, p.lng, 0.08 + 0.92 * (Math.log10(p.views+1) / logMax)]);
   heatLayer = L.heatLayer(pts, {
     radius:heatRadius, blur:heatBlur, maxZoom:13, opacity:0.84,
     gradient:{0:"#0000cc",0.3:"#0088ff",0.55:"#00ffcc",0.75:"#ffdd00",0.9:"#ff4400",1:"#ff0000"},
@@ -552,6 +539,14 @@ function buildHeatmap() {
   clusterLayer.remove(); clusterLayer.addTo(map);
   scheduleLabels();
 }
+
+// Redraw heatmap canvas on every zoom frame so it tracks pinch-zoom in real time
+let _heatRaf = null;
+map.on("zoom move", () => {
+  if (!heatLayer) return;
+  if (_heatRaf) return;
+  _heatRaf = requestAnimationFrame(() => { _heatRaf = null; if (heatLayer) heatLayer.redraw(); });
+});
 
 function scheduleHeatmap() {
   clearTimeout(heatTimer);
@@ -872,7 +867,7 @@ map.on("moveend zoomend", () => {
   renderTimer = setTimeout(() => { rescaleSlider(); scheduleRender(); }, 90);
   clearTimeout(fetchTimer);
   fetchTimer = setTimeout(() => fetchBox(map.getBounds(),3).then(preloadSurrounding), 700);
-  if (showHeat) scheduleLabels();
+  if (showHeat) { scheduleHeatmap(); scheduleLabels(); }
 });
 
 // ─── Tag pills ────────────────────────────────────────────────────────────────
@@ -1014,7 +1009,6 @@ if ("geolocation" in navigator) {
 function escHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
-document.getElementById("load-btn").addEventListener("click",()=>{userMovedSlider=false;loadArea();});
 loadArea();
 </script>
 </body>
