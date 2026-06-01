@@ -84,6 +84,18 @@
     }
     #loc-search::placeholder { color: #3a4268; }
     #loc-search:focus { border-color: #2a4aaf; }
+    #top-action-btns {
+      display: flex; gap: 8px; margin-top: 8px; justify-content: center;
+    }
+    #top-action-btns button {
+      background: rgba(6,11,28,0.88); border: 1px solid #182040; color: #5868a0;
+      border-radius: 20px; padding: 7px 14px; font-size: 0.76rem; font-weight: 500;
+      cursor: pointer; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      min-height: 34px; -webkit-user-select: none; user-select: none;
+      white-space: nowrap; box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+      font-family: inherit;
+    }
+    #top-action-btns button:active { opacity: 0.7; }
     #loc-results {
       display: none; position: absolute; top: calc(100% + 6px); left: 0; right: 0;
       background: rgba(6,11,28,0.95); border: 1px solid #182040; border-radius: 14px;
@@ -518,10 +530,14 @@
 
     <div id="map-title"><span>CinePin</span> - Location Finder</div>
 
-    <!-- Location search -->
+    <!-- Location search + top action buttons -->
     <div id="loc-search-wrap">
       <input id="loc-search" type="text" placeholder="Search Location" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
       <div id="loc-results"></div>
+      <div id="top-action-btns">
+        <button id="my-locations-btn">⭐ My Locations</button>
+        <button id="reset-loc-btn">📍 Reset</button>
+      </div>
     </div>
 
     <!-- Navigation banner -->
@@ -537,10 +553,7 @@
     <!-- Bottom panel -->
     <div id="bottom-container">
 
-      <!-- Heatmap toggle + My Locations in same row -->
       <div id="heatmap-toggle-wrap">
-        <button id="my-locations-btn">⭐ My Locations</button>
-        <button id="reset-loc-btn">📍 Reset</button>
         <button id="heat-btn">Heatmap</button>
       </div>
 
