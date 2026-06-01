@@ -139,26 +139,10 @@
       backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
     }
 
-    /* Radius + Popularity sliders */
-    #radius-section, #pop-section {
+    /* Popularity slider */
+    #pop-section {
       display: flex; align-items: center; gap: 10px;
       padding: 7px 16px 6px; border-bottom: 1px solid #101830;
-    }
-    #rad-value { font-size: 0.67rem; color: #6878b0; font-weight: 600; white-space: nowrap; min-width: 56px; text-align: right; }
-    #radius-slider {
-      flex: 1; appearance: none; -webkit-appearance: none;
-      height: 2px; background: #1a2550; border-radius: 2px; outline: none; cursor: pointer;
-      touch-action: none;
-    }
-    #radius-slider::-webkit-slider-thumb {
-      appearance: none; -webkit-appearance: none;
-      width: 22px; height: 22px; border-radius: 50%;
-      background: var(--accent); border: 2.5px solid #8aadff;
-      cursor: grab; box-shadow: 0 0 10px rgba(58,90,232,0.4);
-    }
-    #radius-slider::-moz-range-thumb {
-      width: 20px; height: 20px; border-radius: 50%;
-      background: var(--accent); border: 2.5px solid #8aadff; cursor: grab;
     }
     .pop-label { font-size: 0.65rem; font-weight: 700; color: var(--muted); letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap; }
     #engagement-slider {
@@ -274,17 +258,16 @@
     #nav-details { font-size: 0.7rem; color: #5a78c0; margin-top: 2px; }
     #nav-stop { background: none; border: 1px solid #2a3a6a; color: #8898c0; border-radius: 6px; padding: 5px 10px; font-size: 0.76rem; cursor: pointer; flex-shrink: 0; min-height: 32px; }
 
-    /* ── My Locations button ── */
+    /* ── My Locations button — sits in heatmap-toggle row ── */
+    #heatmap-toggle-wrap {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
     #my-locations-btn {
-      position: absolute;
-      top: calc(10px + env(safe-area-inset-top, 0px));
-      right: calc(10px + env(safe-area-inset-right, 0px));
-      z-index: 810;
       background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
       border-radius: 20px; padding: 6px 14px; font-size: 0.76rem; font-weight: 500;
       cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
       min-height: 34px; -webkit-user-select: none; user-select: none;
-      transition: background 0.12s, color 0.12s;
+      transition: background 0.12s, color 0.12s; white-space: nowrap;
     }
     #my-locations-btn:active { opacity: 0.7; }
 
@@ -546,26 +529,16 @@
       <button id="nav-stop">✕ Stop</button>
     </div>
 
-    <!-- My Locations button -->
-    <button id="my-locations-btn">⭐ My Locations</button>
-
     <!-- Bottom panel -->
     <div id="bottom-container">
 
-      <!-- Floating heatmap toggle -->
+      <!-- Heatmap toggle + My Locations in same row -->
       <div id="heatmap-toggle-wrap">
+        <button id="my-locations-btn">⭐ My Locations</button>
         <button id="heat-btn" class="active">Heatmap</button>
       </div>
 
       <div id="map-bottom">
-
-        <div id="radius-section">
-          <span class="pop-label">Radius</span>
-          <button class="slider-adj" id="rad-minus">−</button>
-          <input type="range" id="radius-slider" min="0" max="100" value="70" step="1" />
-          <button class="slider-adj" id="rad-plus">+</button>
-          <span id="rad-value">14 km</span>
-        </div>
 
         <div id="pop-section">
           <span class="pop-label">Popularity</span>
@@ -728,10 +701,9 @@ function buildClusters(photos, zoom) {
   });
 }
 
-// ─── Render clusters (rAF-gated) ─────────────────────────────────────────────
+// ─── Render clusters (rAF-gated, signature-skipped) ──────────────────────────
 let rafPending = false;
-let lastRenderBoundsKey = "";
-let lastRenderZoom = -1;
+let lastRenderSig = "";
 
 function scheduleRender() {
   if (rafPending) return;
@@ -742,20 +714,19 @@ function scheduleRender() {
 function renderClusters() {
   if (!allPhotos.length) return;
   const bounds = map.getBounds(), zoom = map.getZoom();
+  // Skip if nothing meaningful changed (0.1° resolution, same zoom & topN)
+  const sig = `${zoom}|${topN}|${bounds.getSouth().toFixed(1)},${bounds.getNorth().toFixed(1)},${bounds.getWest().toFixed(1)},${bounds.getEast().toFixed(1)}`;
+  if (sig === lastRenderSig) return;
+  lastRenderSig = sig;
   clusterLayer.clearLayers();
 
   const buf = Math.max(cellSize(zoom) * 1.5, 0.05);
   const S = bounds.getSouth()-buf, N = bounds.getNorth()+buf,
         W = bounds.getWest()-buf,  E = bounds.getEast()+buf;
 
-  const center = map.getCenter();
-  const maxDist = currentRadius / 111000; // rough degrees
   const inView = [];
   for (const p of allPhotos) {
-    if (!p.thumb || p.lat<S || p.lat>N || p.lng<W || p.lng>E) continue;
-    const dlat = p.lat - center.lat, dlng = (p.lng - center.lng) * Math.cos(center.lat * Math.PI/180);
-    if (Math.sqrt(dlat*dlat + dlng*dlng) > maxDist) continue;
-    inView.push(p);
+    if (p.thumb && p.lat>=S && p.lat<=N && p.lng>=W && p.lng<=E) inView.push(p);
   }
   inView.sort((a,b) => b.views - a.views);
   const filtered = inView.slice(0, topN);
@@ -794,14 +765,10 @@ function buildHeatmap() {
 
   const bounds = map.getBounds();
   const buf = 0.15;
-  const center = map.getCenter();
-  const maxDist = currentRadius / 111000;
-  const visPhotos = allPhotos.filter(p => {
-    if (p.lat < bounds.getSouth()-buf || p.lat > bounds.getNorth()+buf ||
-        p.lng < bounds.getWest()-buf  || p.lng > bounds.getEast()+buf) return false;
-    const dlat = p.lat - center.lat, dlng = (p.lng - center.lng) * Math.cos(center.lat * Math.PI/180);
-    return Math.sqrt(dlat*dlat + dlng*dlng) <= maxDist;
-  });
+  const visPhotos = allPhotos.filter(p =>
+    p.lat >= bounds.getSouth()-buf && p.lat <= bounds.getNorth()+buf &&
+    p.lng >= bounds.getWest()-buf  && p.lng <= bounds.getEast()+buf
+  );
   if (!visPhotos.length) return;
 
   let maxV = 1;
@@ -969,38 +936,6 @@ async function updateLocationLabels() {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ─── Radius slider (log scale: 10m – 50km) ───────────────────────────────────
-let currentRadius = 14000; // metres, matches default slider value 70
-
-function radiusPosToMetres(pos) {
-  return Math.round(10 * Math.pow(5000, pos / 100));
-}
-function fmtRadius(m) {
-  if (m < 1000) return `${m} m`;
-  const km = m / 1000;
-  return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
-}
-function getRadiusBounds() {
-  const c = map.getCenter();
-  const km = currentRadius / 1000;
-  const latD = km / 111;
-  const lngD = km / (111 * Math.cos(c.lat * Math.PI / 180));
-  return L.latLngBounds([c.lat - latD, c.lng - lngD], [c.lat + latD, c.lng + lngD]);
-}
-
-const radSlider = document.getElementById("radius-slider");
-const radLbl    = document.getElementById("rad-value");
-
-function applyRadius(pos) {
-  pos = Math.max(0, Math.min(100, pos));
-  radSlider.value = pos;
-  currentRadius = radiusPosToMetres(pos);
-  radLbl.textContent = fmtRadius(currentRadius);
-}
-// Radius changes filter display instantly — no reload needed
-radSlider.addEventListener("input", () => { applyRadius(parseInt(radSlider.value)); scheduleRender(); scheduleHeatmap(); });
-document.getElementById("rad-minus").addEventListener("click", () => { applyRadius(parseInt(radSlider.value) - 8); scheduleRender(); scheduleHeatmap(); });
-document.getElementById("rad-plus").addEventListener("click",  () => { applyRadius(parseInt(radSlider.value) + 8); scheduleRender(); scheduleHeatmap(); });
 
 // ─── Slider: non-linear (0→50: all→30, 50→100: 30→1) ──────────────────────
 const slider    = document.getElementById("engagement-slider");
