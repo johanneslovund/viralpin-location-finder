@@ -757,8 +757,11 @@
         <button id="heat-btn">Heatmap</button>
         <button id="aurora-btn">Aurora</button>
         <div style="position:relative">
-          <button id="cam-btn">📹 Webcams</button>
-          <div id="cam-picker">
+          <button id="db-btn">Database</button>
+          <div id="db-picker">
+            <button class="db-opt active" data-src="flickr">📸 Flickr<span class="db-check">✓</span></button>
+            <button class="db-opt" data-src="wikimedia">🌐 Wikimedia<span class="db-check">✓</span></button>
+            <div style="height:1px;background:var(--border);margin:4px 0"></div>
             <div class="cam-toggle-row" id="cam-scenic-row">
               <span class="cam-toggle-label"><b>🌄 Scenic Cameras</b><small>Windy.com</small></span>
               <div class="cam-toggle-switch"></div>
@@ -767,17 +770,6 @@
               <span class="cam-toggle-label"><b>🚗 Road Cameras</b><small>Statens Vegvesen</small></span>
               <div class="cam-toggle-switch"></div>
             </div>
-            <div id="windy-key-wrap">
-              <label>Windy API Key (free at windy.com/webcams/api)</label>
-              <input id="windy-key-input" type="text" placeholder="Paste key here…" />
-            </div>
-          </div>
-        </div>
-        <div style="position:relative">
-          <button id="db-btn">Database</button>
-          <div id="db-picker">
-            <button class="db-opt active" data-src="flickr">📸 Flickr<span class="db-check">✓</span></button>
-            <button class="db-opt" data-src="wikimedia">🌐 Wikimedia<span class="db-check">✓</span></button>
           </div>
         </div>
       </div>
@@ -1196,39 +1188,40 @@ const camLayer     = L.layerGroup().addTo(map);
 let camRefreshId   = null;
 let camImgRefreshId = null;
 
-const camBtn       = document.getElementById("cam-btn");
-const camPicker    = document.getElementById("cam-picker");
-const scenicRow    = document.getElementById("cam-scenic-row");
-const roadRow      = document.getElementById("cam-road-row");
-const windyInput   = document.getElementById("windy-key-input");
-if (windyApiKey) windyInput.value = windyApiKey;
-
-windyInput.addEventListener("change", () => {
-  windyApiKey = windyInput.value.trim();
-  localStorage.setItem("windyApiKey", windyApiKey);
-  if (showScenicCams) refreshWebcams();
-});
+const scenicRow = document.getElementById("cam-scenic-row");
+const roadRow   = document.getElementById("cam-road-row");
 
 function updateCamToggleUI() {
   scenicRow.classList.toggle("on", showScenicCams);
   roadRow.classList.toggle("on", showRoadCams);
-  camBtn.classList.toggle("has-active", showScenicCams || showRoadCams);
 }
 
-scenicRow.addEventListener("click", () => {
+function disableWebcams() {
+  showScenicCams = false; showRoadCams = false;
+  updateCamToggleUI(); camLayer.clearLayers(); clearTimeout(camRefreshId);
+}
+
+scenicRow.addEventListener("click", e => {
+  e.stopPropagation(); // keep picker open
   showScenicCams = !showScenicCams;
+  if (showScenicCams || showRoadCams) {
+    // Switching to webcam mode — clear photos
+    clearAll(); clusterLayer.addTo(map);
+    if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+    document.querySelectorAll(".db-opt").forEach(o => o.classList.remove("active"));
+  }
   updateCamToggleUI(); refreshWebcams();
 });
-roadRow.addEventListener("click", () => {
+
+roadRow.addEventListener("click", e => {
+  e.stopPropagation();
   showRoadCams = !showRoadCams;
+  if (showScenicCams || showRoadCams) {
+    clearAll(); clusterLayer.addTo(map);
+    if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+    document.querySelectorAll(".db-opt").forEach(o => o.classList.remove("active"));
+  }
   updateCamToggleUI(); refreshWebcams();
-});
-camBtn.addEventListener("click", () => {
-  camPicker.classList.toggle("open");
-});
-document.addEventListener("click", e => {
-  if (!camBtn.contains(e.target) && !camPicker.contains(e.target))
-    camPicker.classList.remove("open");
 });
 
 function addCamMarker(lat, lng, title, imgUrl, type, extUrl) {
@@ -1342,7 +1335,11 @@ dbBtn.addEventListener("click", () => {
 document.querySelectorAll(".db-opt").forEach(opt => {
   opt.addEventListener("click", () => {
     const src = opt.dataset.src;
-    if (src === currentSource) { dbPicker.classList.remove("open"); dbBtn.classList.remove("open"); return; }
+    // Clear any active webcams first
+    disableWebcams();
+    if (src === currentSource && !showScenicCams && !showRoadCams) {
+      dbPicker.classList.remove("open"); dbBtn.classList.remove("open"); return;
+    }
     currentSource = src;
     document.querySelectorAll(".db-opt").forEach(o => o.classList.toggle("active", o.dataset.src === src));
     dbBtn.textContent = src === "wikimedia" ? "🌐 Wikimedia" : "Database";
