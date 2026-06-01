@@ -139,7 +139,7 @@
     /* ── Floating button row (heatmap + reset + my locations) ── */
     #heatmap-toggle-wrap {
       display: flex; flex-direction: row; align-items: center; justify-content: center;
-      gap: 10px; width: 100%;
+      gap: 10px; width: 100%; position: relative;
     }
     #heat-btn {
       background: var(--panel); border: 1px solid var(--border-strong); color: #7888b8;
@@ -211,6 +211,37 @@
       50%      { box-shadow: 0 0 28px rgba(0,255,120,0.7), 0 0 56px rgba(160,0,255,0.35); }
     }
     #aurora-btn:active { opacity: 0.75; }
+
+    /* ── Database picker ── */
+    #db-btn {
+      background: var(--panel); border: 1px solid var(--border-strong); color: #7888b8;
+      border-radius: 20px; padding: 6px 20px; font-size: 0.76rem; font-weight: 500;
+      cursor: pointer; backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      min-height: 34px; -webkit-user-select: none; user-select: none;
+      box-shadow: var(--glass-shine);
+    }
+    #db-btn.open { background: rgba(50,70,160,0.4); border-color: rgba(100,140,255,0.4); color: #c0d0ff; }
+    #db-btn:active { opacity: 0.75; }
+    #db-picker {
+      display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+      background: var(--panel); border: 1px solid var(--border-strong); border-radius: 14px;
+      backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
+      box-shadow: var(--glass-shine), 0 4px 24px rgba(0,0,0,0.5);
+      overflow: hidden; min-width: 160px; z-index: 820;
+    }
+    #db-picker.open { display: block; }
+    .db-opt {
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      background: none; border: none; color: #7888b8; cursor: pointer;
+      padding: 10px 16px; font-size: 0.76rem; font-family: inherit; text-align: left;
+      border-bottom: 1px solid var(--border); transition: background 0.1s;
+    }
+    .db-opt:last-child { border-bottom: none; }
+    .db-opt:active { background: rgba(255,255,255,0.05); }
+    .db-opt.active { color: #c0d0ff; font-weight: 600; }
+    .db-opt .db-check { margin-left: auto; opacity: 0; }
+    .db-opt.active .db-check { opacity: 1; }
 
 
     /* Main panel: slider + tags */
@@ -653,6 +684,13 @@
       <div id="heatmap-toggle-wrap">
         <button id="heat-btn">Heatmap</button>
         <button id="aurora-btn">Aurora</button>
+        <div style="position:relative">
+          <button id="db-btn">Database</button>
+          <div id="db-picker">
+            <button class="db-opt active" data-src="flickr">📸 Flickr<span class="db-check">✓</span></button>
+            <button class="db-opt" data-src="wikimedia">🌐 Wikimedia<span class="db-check">✓</span></button>
+          </div>
+        </div>
       </div>
 
       <div id="map-bottom">
@@ -1049,6 +1087,35 @@ auroraBtn.addEventListener("click", () => {
   if (showAurora) startAurora(); else stopAurora();
 });
 
+// ─── Database picker ─────────────────────────────────────────────────────────
+const dbBtn    = document.getElementById("db-btn");
+const dbPicker = document.getElementById("db-picker");
+
+dbBtn.addEventListener("click", () => {
+  dbPicker.classList.toggle("open");
+  dbBtn.classList.toggle("open", dbPicker.classList.contains("open"));
+});
+
+document.querySelectorAll(".db-opt").forEach(opt => {
+  opt.addEventListener("click", () => {
+    const src = opt.dataset.src;
+    if (src === currentSource) { dbPicker.classList.remove("open"); dbBtn.classList.remove("open"); return; }
+    currentSource = src;
+    document.querySelectorAll(".db-opt").forEach(o => o.classList.toggle("active", o.dataset.src === src));
+    dbBtn.textContent = src === "wikimedia" ? "🌐 Wikimedia" : "Database";
+    dbPicker.classList.remove("open"); dbBtn.classList.remove("open");
+    userMovedSlider = false;
+    loadArea();
+  });
+});
+
+// Close picker when clicking outside
+document.addEventListener("click", e => {
+  if (!dbBtn.contains(e.target) && !dbPicker.contains(e.target)) {
+    dbPicker.classList.remove("open"); dbBtn.classList.remove("open");
+  }
+});
+
 // Reset location button — only shown on touch devices
 document.getElementById("reset-loc-btn").addEventListener("click", () => {
   if (lastUserPos) {
@@ -1267,6 +1334,71 @@ document.getElementById("slider-plus").addEventListener("click",  () => applyTop
 slider.dataset.maxN = "60";
 
 // ─── Flickr API ───────────────────────────────────────────────────────────────
+// ─── Data source ─────────────────────────────────────────────────────────────
+let currentSource = "flickr"; // "flickr" | "wikimedia"
+
+// ─── Wikimedia Commons fetch (quality-filtered) ───────────────────────────────
+async function wikimediaFetchBounds(bounds) {
+  const center = bounds.getCenter();
+  const latD = (bounds.getNorth() - bounds.getSouth()) / 2;
+  const lngD = (bounds.getEast() - bounds.getWest()) / 2;
+  const radiusKm = Math.min(Math.sqrt(latD*latD + lngD*lngD) * 111, 50);
+  const radiusM  = Math.max(500, Math.min(Math.round(radiusKm * 1000), 10000));
+
+  // 1. Geosearch
+  const geo = await fetch(`https://commons.wikimedia.org/w/api.php?${new URLSearchParams({
+    action:'query', list:'geosearch', gscoord:`${center.lat}|${center.lng}`,
+    gsradius: radiusM, gslimit: 50, format:'json', origin:'*', gsnamespace:6
+  })}`).then(r => r.json());
+  const hits = geo.query?.geosearch || [];
+  if (!hits.length) return [];
+
+  const geoMap = {};
+  hits.forEach(h => { geoMap[h.title] = { lat: h.lat, lng: h.lon }; });
+
+  // 2. Batch imageinfo (thumbnail + size for quality filter)
+  const info = await fetch(`https://commons.wikimedia.org/w/api.php?${new URLSearchParams({
+    action:'query', titles: hits.map(h => h.title).join('|'),
+    prop:'imageinfo', iiprop:'url|size|timestamp', iiurlwidth:'300',
+    format:'json', origin:'*'
+  })}`).then(r => r.json());
+
+  const results = [];
+  for (const page of Object.values(info.query?.pages || {})) {
+    const ii = page.imageinfo?.[0];
+    if (!ii) continue;
+    // Quality filters: min 1500px wide, min 200KB, JPEG only
+    if ((ii.width  || 0) < 1500)   continue;
+    if ((ii.size   || 0) < 200000) continue;
+    if (!ii.url?.match(/\.(jpe?g)$/i)) continue;
+    const geo = geoMap[page.title];
+    if (!geo) continue;
+    const clean = page.title.replace(/^File:/,'').replace(/\.[^.]+$/,'').replace(/_/g,' ');
+    results.push({
+      id: `wm_${page.pageid}`,
+      title: clean, lat: geo.lat, lng: geo.lng,
+      thumb:  ii.thumburl || ii.url,
+      medium: ii.url, large: ii.url,
+      owner: 'commons', views: (ii.width||0) * (ii.height||0) / 1e6, // Mpx as proxy
+      url: `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title)}`
+    });
+  }
+  return results;
+}
+
+async function wikimediaIngestBounds(bounds) {
+  try {
+    const photos = await wikimediaFetchBounds(bounds);
+    let added = 0;
+    for (const ph of photos) {
+      if (photoById.has(ph.id) || !ph.thumb) continue;
+      allPhotos.push(ph); photoById.set(ph.id, ph); added++;
+    }
+    if (added > 0) { scheduleHeatmap(); rescaleSlider(); scheduleRender(); }
+  } catch(e) { console.warn("Wikimedia:", e); }
+}
+
+// ─── Flickr fetch ─────────────────────────────────────────────────────────────
 async function flickrFetch(extra) {
   const p = new URLSearchParams({
     method:"flickr.photos.search", api_key:CONFIG.FLICKR_API_KEY,
@@ -1362,6 +1494,15 @@ async function loadArea() {
   status.innerHTML = `<span class="loader"></span>Loading…`;
   clearAll(); clusterLayer.addTo(map);
 
+  if (currentSource === "wikimedia") {
+    try {
+      await wikimediaIngestBounds(map.getBounds());
+      buildHeatmap(); rescaleSlider(); renderClusters(); scheduleRender();
+      status.textContent = `${allPhotos.length} spots`;
+    } catch(err) { status.textContent = `⚠ ${err.message}`; }
+    return;
+  }
+
   try {
     const b = map.getBounds();
     const bbox = `${Math.max(b.getWest(),-180).toFixed(4)},${Math.max(b.getSouth(),-90).toFixed(4)},${Math.min(b.getEast(),180).toFixed(4)},${Math.min(b.getNorth(),90).toFixed(4)}`;
@@ -1395,7 +1536,10 @@ map.on("moveend zoomend", () => {
   clearTimeout(renderTimer);
   renderTimer = setTimeout(() => { rescaleSlider(); scheduleRender(); }, 200);
   clearTimeout(fetchTimer);
-  fetchTimer = setTimeout(() => fetchBox(map.getBounds(),3).then(preloadSurrounding), 900);
+  fetchTimer = setTimeout(() => {
+    if (currentSource === "wikimedia") wikimediaIngestBounds(map.getBounds());
+    else fetchBox(map.getBounds(),3).then(preloadSurrounding);
+  }, 900);
   if (showHeat) scheduleHeatmap();
 });
 let lastLabelZoom = -1;
