@@ -343,6 +343,27 @@
     }
     #my-locations-btn:active { opacity: 0.7; }
 
+    /* ── History modal ── */
+    #history-modal {
+      display: none; position: fixed; inset: 0; z-index: 9000;
+      background: rgba(0,0,0,0.92); flex-direction: column;
+      padding: calc(60px + env(safe-area-inset-top, 0px)) 16px calc(30px + env(safe-area-inset-bottom, 0px));
+    }
+    #history-modal.open { display: flex; }
+    #history-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; }
+    .history-item {
+      display: flex; align-items: center; gap: 12px;
+      background: rgba(10,18,42,0.6); border: 1px solid var(--border-strong);
+      border-radius: 12px; padding: 8px 12px; cursor: pointer;
+    }
+    .history-item:active { opacity: 0.7; }
+    .history-thumb {
+      width: 52px; height: 52px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
+    }
+    .history-info { min-width: 0; }
+    .history-title { font-size: 0.78rem; color: #dde2f5; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-coords { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
+
     /* ── My Locations modal ── */
     #my-locations-modal {
       display: none; position: fixed; inset: 0; z-index: 9000;
@@ -606,6 +627,7 @@
       <div id="top-action-btns">
         <button id="my-locations-btn">⭐ My Locations</button>
         <button id="reset-loc-btn">📍 Reset</button>
+        <button id="history-btn">🕐 History</button>
       </div>
     </div>
 
@@ -686,6 +708,15 @@
 
     <div id="status"></div>
   </div>
+</div>
+
+<!-- History modal -->
+<div id="history-modal">
+  <div class="ml-header">
+    <span class="ml-title">🕐 Recently Viewed</span>
+    <button id="history-close" class="ml-close-btn" style="background:none;border:none;color:#9ab;font-size:1.2rem;cursor:pointer;padding:4px 8px">✕</button>
+  </div>
+  <div id="history-list"></div>
 </div>
 
 <!-- My Locations modal -->
@@ -1923,6 +1954,42 @@ function renderMyLocations() {
   });
 }
 
+// ─── History modal ────────────────────────────────────────────────────────────
+function openHistory() {
+  const modal = document.getElementById("history-modal");
+  modal.classList.add("open");
+  const list = document.getElementById("history-list");
+  let hist = [];
+  try { hist = JSON.parse(localStorage.getItem("cinepinHistory") || "[]"); } catch {}
+  if (!hist.length) {
+    list.innerHTML = `<div style="color:var(--muted);font-size:0.82rem;text-align:center;padding:32px 0">No photos viewed yet</div>`;
+    return;
+  }
+  list.innerHTML = hist.map((ph, i) => `
+    <div class="history-item" data-idx="${i}">
+      <img class="history-thumb" src="${escHtml(ph.thumb)}" alt="" />
+      <div class="history-info">
+        <div class="history-title">${escHtml(ph.title)}</div>
+        <div class="history-coords">${ph.lat.toFixed(4)}°, ${ph.lng.toFixed(4)}°</div>
+      </div>
+    </div>`).join("");
+  list.querySelectorAll(".history-item").forEach((el, i) => {
+    el.addEventListener("click", () => {
+      modal.classList.remove("open");
+      openLightbox(hist[i]);
+    });
+  });
+}
+
+document.getElementById("history-btn").addEventListener("click", openHistory);
+document.getElementById("history-close").addEventListener("click", () => {
+  document.getElementById("history-modal").classList.remove("open");
+});
+document.getElementById("history-modal").addEventListener("click", e => {
+  if (e.target === document.getElementById("history-modal"))
+    document.getElementById("history-modal").classList.remove("open");
+});
+
 document.getElementById("my-locations-btn").addEventListener("click", openMyLocations);
 document.getElementById("ml-close").addEventListener("click", closeMyLocations);
 document.getElementById("ml-new-folder").addEventListener("click", () => {
@@ -1960,8 +2027,19 @@ function updateGalleryUI() {
   }
 }
 
+function addToHistory(ph) {
+  try {
+    let hist = JSON.parse(localStorage.getItem("cinepinHistory") || "[]");
+    hist = hist.filter(h => h.id !== ph.id);
+    hist.unshift({ id:ph.id, title:ph.title, lat:ph.lat, lng:ph.lng, thumb:ph.thumb });
+    hist = hist.slice(0, 10);
+    localStorage.setItem("cinepinHistory", JSON.stringify(hist));
+  } catch {}
+}
+
 function openLightbox(ph) {
   currentLbPhoto = ph;
+  addToHistory(ph);
   buildGallery(ph);
   document.getElementById("lightbox-img").src = ph.large||ph.medium||ph.thumb;
   document.getElementById("lightbox-title").textContent = ph.title;
