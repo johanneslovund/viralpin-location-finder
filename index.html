@@ -169,16 +169,6 @@
     }
     #aurora-btn:active { opacity: 0.75; }
 
-    /* ── Aurora canvas ── */
-    #aurora-canvas {
-      position: absolute; inset: 0; pointer-events: none; z-index: 450;
-      mix-blend-mode: screen;
-      animation: aurora-shimmer 4s ease-in-out infinite;
-    }
-    @keyframes aurora-shimmer {
-      0%,100% { opacity: 0.75; }
-      50%      { opacity: 1; }
-    }
 
     /* Main panel: slider + tags */
     #map-bottom {
@@ -638,7 +628,6 @@
       </div>
     </div>
 
-    <canvas id="aurora-canvas" style="display:none"></canvas>
     <div id="status"></div>
   </div>
 </div>
@@ -863,6 +852,12 @@ const heatBtn = document.getElementById("heat-btn");
 heatBtn.addEventListener("click", () => {
   showHeat = !showHeat;
   heatBtn.classList.toggle("active", showHeat);
+  // Mutual exclusion — turn off aurora
+  if (showHeat && showAurora) {
+    showAurora = false;
+    auroraBtn.classList.remove("active");
+    stopAurora();
+  }
   buildHeatmap();
   if (!showHeat) labelLayer.clearLayers();
 });
@@ -878,103 +873,85 @@ map.on("zoom", () => {
   });
 });
 
-// ─── Aurora overlay ───────────────────────────────────────────────────────────
-let showAurora    = false;
-let auroraCoords  = [];          // [[lng, lat, intensity], ...]
-let auroraTimer   = null;
+// ─── Aurora overlay (uses leaflet-heat for smooth rendering) ──────────────────
+let showAurora   = false;
+let auroraCoords = [];
+let auroraLayer  = null;
+let auroraTimer  = null;
 
-const auroraCanvas = document.getElementById("aurora-canvas");
-const auroraCtx    = auroraCanvas.getContext("2d");
-const auroraBtn    = document.getElementById("aurora-btn");
+const AURORA_GRADIENT = {
+  0:    "#001a08",
+  0.25: "#00aa44",
+  0.55: "#00ffaa",
+  0.78: "#4466ff",
+  1:    "#cc00ff"
+};
+const auroraBtn = document.getElementById("aurora-btn");
 
-function resizeAuroraCanvas() {
-  const size = map.getSize();
-  auroraCanvas.width  = size.x;
-  auroraCanvas.height = size.y;
-}
-
-function renderAurora() {
+function buildAuroraLayer() {
+  if (auroraLayer) { map.removeLayer(auroraLayer); auroraLayer = null; }
   if (!showAurora || !auroraCoords.length) return;
-  resizeAuroraCanvas();
-  const ctx = auroraCtx;
-  const w = auroraCanvas.width, h = auroraCanvas.height;
-  ctx.clearRect(0, 0, w, h);
 
-  // Filter to visible bounds (same approach as buildHeatmap)
   const bounds = map.getBounds();
   const buf = 3;
-  const visible = auroraCoords.filter(([lng, lat, intensity]) =>
-    intensity >= 12 &&
-    lat >= bounds.getSouth() - buf && lat <= bounds.getNorth() + buf &&
-    lng >= bounds.getWest()  - buf && lng <= bounds.getEast()  + buf
+  const visible = auroraCoords.filter(([lng, lat, i]) =>
+    i >= 10 &&
+    lat >= bounds.getSouth()-buf && lat <= bounds.getNorth()+buf &&
+    lng >= bounds.getWest()-buf  && lng <= bounds.getEast()+buf
   );
   if (!visible.length) return;
 
-  // Normalise intensities to max visible value (same as heatmap log-scale)
   let maxI = 1;
   for (const [,,i] of visible) if (i > maxI) maxI = i;
 
-  // Dynamic radius matching heatmap's zoom-based formula
-  const { radius } = dynamicHeatOpts();
-  const blobR = radius * 3;
+  // [lat, lng, normalised_weight] — same format as photo heatmap
+  const pts = visible.map(([lng, lat, i]) => [lat, lng, i / maxI]);
 
-  ctx.globalCompositeOperation = "screen";
-  for (const [lng, lat, intensity] of visible) {
-    const normI = intensity / maxI;                       // 0–1
-    const alpha = 0.04 + 0.55 * (normI * normI);         // quadratic — stays subtle at low values
-    const pt = map.latLngToContainerPoint([lat, lng]);
-    if (pt.x < -blobR || pt.x > w + blobR ||
-        pt.y < -blobR || pt.y > h + blobR) continue;
-
-    // Green → teal → purple gradient by normalised intensity
-    let cr, cg, cb;
-    if (normI < 0.4)      { cr = 0;   cg = 200; cb = 80;  }
-    else if (normI < 0.75){ cr = 0;   cg = 220; cb = 200; }
-    else                  { cr = 160; cg = 60;  cb = 255; }
-
-    const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, blobR);
-    grad.addColorStop(0,   `rgba(${cr},${cg},${cb},${alpha})`);
-    grad.addColorStop(0.5, `rgba(${cr},${cg},${cb},${alpha * 0.4})`);
-    grad.addColorStop(1,   `rgba(${cr},${cg},${cb},0)`);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(pt.x, pt.y, blobR, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalCompositeOperation = "source-over";
+  const { radius, blur } = dynamicHeatOpts();
+  auroraLayer = L.heatLayer(pts, {
+    radius: radius * 1.8,
+    blur:   blur   * 1.8,
+    maxZoom: 12,
+    opacity: 0.82,
+    gradient: AURORA_GRADIENT,
+  }).addTo(map);
+  // keep cluster markers on top
+  clusterLayer.remove(); clusterLayer.addTo(map);
 }
 
-async function fetchAuroraOverlay() {
+async function fetchAuroraData() {
   try {
     const r = await fetch("https://services.swpc.noaa.gov/json/ovation_aurora_latest.json");
     const d = await r.json();
     auroraCoords = d.coordinates || [];
-    renderAurora();
-  } catch(e) { console.warn("Aurora fetch:", e); }
+    buildAuroraLayer();
+  } catch(e) { console.warn("Aurora:", e); }
 }
 
-function startAuroraLayer() {
-  auroraCanvas.style.display = "";
-  fetchAuroraOverlay();
+function startAurora() {
+  fetchAuroraData();
   clearInterval(auroraTimer);
-  auroraTimer = setInterval(fetchAuroraOverlay, 5 * 60 * 1000);
-  map.on("moveend zoomend", renderAurora);
+  auroraTimer = setInterval(fetchAuroraData, 5 * 60 * 1000);
+  map.on("moveend zoomend", buildAuroraLayer);
 }
 
-function stopAuroraLayer() {
-  auroraCanvas.style.display = "none";
-  auroraCtx.clearRect(0, 0, auroraCanvas.width, auroraCanvas.height);
+function stopAurora() {
   clearInterval(auroraTimer);
-  map.off("moveend zoomend", renderAurora);
+  map.off("moveend zoomend", buildAuroraLayer);
+  if (auroraLayer) { map.removeLayer(auroraLayer); auroraLayer = null; }
 }
-
-resizeAuroraCanvas();
-map.on("resize", resizeAuroraCanvas);
 
 auroraBtn.addEventListener("click", () => {
   showAurora = !showAurora;
   auroraBtn.classList.toggle("active", showAurora);
-  if (showAurora) startAuroraLayer(); else stopAuroraLayer();
+  // Mutual exclusion — turn off heatmap
+  if (showAurora && showHeat) {
+    showHeat = false;
+    heatBtn.classList.remove("active");
+    if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+    labelLayer.clearLayers();
+  }
+  if (showAurora) startAurora(); else stopAurora();
 });
 
 // Reset location button — only shown on touch devices
