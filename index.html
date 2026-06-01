@@ -59,9 +59,12 @@
       top: calc(8px + env(safe-area-inset-top, 0px));
       left: 50%; transform: translateX(-50%);
       z-index: 800; pointer-events: none;
-      height: 38px; width: auto;
     }
-    #map-title img { height: 38px; width: auto; display: block; }
+    #map-title img {
+      height: 48px; width: 48px; display: block;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.5);
+    }
     .leaflet-tile-pane { filter: saturate(0.75) brightness(1.18) hue-rotate(170deg); }
 
     /* ── Location search bar ── */
