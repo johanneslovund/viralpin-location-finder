@@ -1068,7 +1068,7 @@ function buildHeatmap() {
 
 function scheduleHeatmap() {
   clearTimeout(heatTimer);
-  heatTimer = setTimeout(buildHeatmap, 600);
+  heatTimer = setTimeout(buildHeatmap, 800);
 }
 
 // ─── Heatmap toggle ───────────────────────────────────────────────────────────
@@ -1269,7 +1269,7 @@ async function loadVegvesen(bounds) {
                 || `Vegkamera ${obj.id}`;
       const imgUrl = `https://webkamera.atlas.vegvesen.no/public/kamera?id=${obj.id}&ts=${Date.now()}`;
       addCamMarker(lat, lng, name, imgUrl, "road",
-        `https://www.vegvesen.no/trafikk-og-vegkart/#Kamera?kameraId=${obj.id}`);
+        `https://webkamera.atlas.vegvesen.no`);
     }
   } catch(e) { console.warn("Vegvesen:", e.message); }
 }
@@ -1282,7 +1282,7 @@ async function loadWindy(bounds) {
     // Windy Webcams API v3
     const r = await fetch(
       `https://api.windy.com/webcams/api/v3/webcams?boundingBox=${S},${W},${N},${E}&limit=100&include=location,images`,
-      { headers:{ 'Authorization': `Bearer ${windyApiKey}` } }
+      { headers:{ 'x-windy-api-key': windyApiKey } }
     );
     if (!r.ok) { console.warn("Windy HTTP", r.status); return; }
     const d = await r.json();
@@ -1572,7 +1572,7 @@ function applyTopNFromSlider(pos) {
   userMovedSlider = true;
   lastRenderBoundsKey = ""; // force re-render
   clearTimeout(renderTimer);
-  renderTimer = setTimeout(scheduleRender, 180);
+  renderTimer = setTimeout(scheduleRender, 300);
 }
 
 function applyTopN(val) {
@@ -1582,7 +1582,7 @@ function applyTopN(val) {
   sliderLbl.textContent = topN >= maxN ? "All" : `Top ${topN}`;
   userMovedSlider = true;
   clearTimeout(renderTimer);
-  renderTimer = setTimeout(scheduleRender, 180);
+  renderTimer = setTimeout(scheduleRender, 300);
 }
 
 function sliderStep() {
@@ -1827,17 +1827,28 @@ async function loadArea() {
 }
 
 // ─── Map events ───────────────────────────────────────────────────────────────
-map.on("moveend zoomend", () => {
-  if (!showScenicCams && !showRoadCams) {
-    clearTimeout(renderTimer);
-    renderTimer = setTimeout(() => { rescaleSlider(); scheduleRender(); }, 250);
-    clearTimeout(fetchTimer);
-    fetchTimer = setTimeout(() => {
-      if (currentSource === "wikimedia") wikimediaIngestBounds(map.getBounds());
-      else fetchBox(map.getBounds(),3).then(preloadSurrounding);
-    }, 1100);
-    if (showHeat) scheduleHeatmap();
-  }
+map.on("moveend", () => {
+  if (showScenicCams || showRoadCams) return;
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(() => { rescaleSlider(); scheduleRender(); }, 300);
+  clearTimeout(fetchTimer);
+  fetchTimer = setTimeout(() => {
+    if (currentSource === "wikimedia") wikimediaIngestBounds(map.getBounds());
+    else fetchBox(map.getBounds(), 3).then(preloadSurrounding);
+  }, 1400);
+  // Heatmap rebuild on pan is expensive — skip, it redraws on zoomend
+});
+
+map.on("zoomend", () => {
+  if (showScenicCams || showRoadCams) return;
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(() => { rescaleSlider(); scheduleRender(); }, 300);
+  clearTimeout(fetchTimer);
+  fetchTimer = setTimeout(() => {
+    if (currentSource === "wikimedia") wikimediaIngestBounds(map.getBounds());
+    else fetchBox(map.getBounds(), 3).then(preloadSurrounding);
+  }, 1400);
+  if (showHeat) scheduleHeatmap();
 });
 let lastLabelZoom = -1;
 map.on("zoomend", () => {
