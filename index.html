@@ -243,6 +243,78 @@
     .db-opt .db-check { margin-left: auto; opacity: 0; }
     .db-opt.active .db-check { opacity: 1; }
 
+    /* ── Webcam button + picker ── */
+    #cam-btn {
+      background: var(--panel); border: 1px solid var(--border-strong); color: #7888b8;
+      border-radius: 20px; padding: 6px 20px; font-size: 0.76rem; font-weight: 500;
+      cursor: pointer; backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
+      transition: background 0.15s, color 0.15s; min-height: 34px;
+      -webkit-user-select: none; user-select: none; box-shadow: var(--glass-shine);
+    }
+    #cam-btn.has-active { background: rgba(0,140,200,0.3); border-color: rgba(0,200,255,0.4); color: #80e8ff; }
+    #cam-btn:active { opacity: 0.75; }
+    #cam-picker {
+      display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+      background: var(--panel); border: 1px solid var(--border-strong); border-radius: 14px;
+      backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
+      box-shadow: var(--glass-shine), 0 4px 24px rgba(0,0,0,0.5);
+      min-width: 210px; z-index: 820; padding: 8px 0;
+    }
+    #cam-picker.open { display: block; }
+    .cam-toggle-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 14px; cursor: pointer; transition: background 0.1s;
+    }
+    .cam-toggle-row:active { background: rgba(255,255,255,0.04); }
+    .cam-toggle-label { font-size: 0.76rem; color: #8898b8; flex: 1; }
+    .cam-toggle-label b { display: block; color: #c0d0e8; font-size: 0.78rem; }
+    .cam-toggle-label small { font-size: 0.62rem; color: var(--muted); }
+    .cam-toggle-switch {
+      width: 36px; height: 20px; border-radius: 10px; background: #1a2550;
+      border: 1px solid var(--border-strong); position: relative; flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .cam-toggle-switch::after {
+      content: ""; position: absolute; width: 14px; height: 14px;
+      border-radius: 50%; background: #4a5a88; top: 2px; left: 2px; transition: 0.2s;
+    }
+    .cam-toggle-row.on .cam-toggle-switch { background: rgba(0,160,220,0.5); border-color: #00aadd; }
+    .cam-toggle-row.on .cam-toggle-switch::after { left: 18px; background: #00ddff; }
+    #windy-key-wrap { padding: 4px 14px 10px; border-top: 1px solid var(--border); margin-top: 4px; }
+    #windy-key-wrap label { font-size: 0.6rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 4px; }
+    #windy-key-input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-strong); color: #c0d0ff; border-radius: 8px; padding: 5px 8px; font-size: 0.68rem; outline: none; font-family: inherit; }
+
+    /* ── Webcam map markers ── */
+    .cam-marker {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    }
+    .cam-scenic { background: rgba(0,140,200,0.85); border: 2px solid #00ddff; }
+    .cam-road   { background: rgba(180,80,0,0.85);  border: 2px solid #ff9933; }
+
+    /* ── Webcam viewer modal ── */
+    #cam-modal {
+      display: none; position: fixed; inset: 0; z-index: 9500;
+      background: rgba(0,0,0,0.9); flex-direction: column;
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    #cam-modal.open { display: flex; }
+    #cam-modal-inner {
+      background: var(--panel); border: 1px solid var(--border-strong);
+      border-radius: 18px; overflow: hidden; max-width: 540px; width: 100%;
+      backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
+      box-shadow: var(--glass-shine), 0 8px 40px rgba(0,0,0,0.6);
+    }
+    #cam-img { width: 100%; display: block; background: #0a0f1e; min-height: 200px; object-fit: cover; }
+    #cam-info { padding: 12px 16px; }
+    #cam-title { font-size: 0.88rem; font-weight: 700; color: #dde2f5; margin-bottom: 4px; }
+    #cam-meta  { font-size: 0.68rem; color: var(--muted); }
+    #cam-footer { display: flex; gap: 8px; padding: 0 16px 14px; flex-wrap: wrap; }
+    .cam-link { color: #7c9fff; font-size: 0.72rem; text-decoration: none; border: 1px solid #1a2e7a; border-radius: 6px; padding: 6px 10px; background: rgba(10,20,60,0.6); }
+    #cam-close-btn { position: absolute; top: 14px; right: 16px; background: none; border: none; color: #888; font-size: 1.8rem; cursor: pointer; }
+
 
     /* Main panel: slider + tags */
     #map-bottom {
@@ -685,6 +757,23 @@
         <button id="heat-btn">Heatmap</button>
         <button id="aurora-btn">Aurora</button>
         <div style="position:relative">
+          <button id="cam-btn">📹 Webcams</button>
+          <div id="cam-picker">
+            <div class="cam-toggle-row" id="cam-scenic-row">
+              <span class="cam-toggle-label"><b>🌄 Scenic Cameras</b><small>Windy.com</small></span>
+              <div class="cam-toggle-switch"></div>
+            </div>
+            <div class="cam-toggle-row" id="cam-road-row">
+              <span class="cam-toggle-label"><b>🚗 Road Cameras</b><small>Statens Vegvesen</small></span>
+              <div class="cam-toggle-switch"></div>
+            </div>
+            <div id="windy-key-wrap">
+              <label>Windy API Key (free at windy.com/webcams/api)</label>
+              <input id="windy-key-input" type="text" placeholder="Paste key here…" />
+            </div>
+          </div>
+        </div>
+        <div style="position:relative">
           <button id="db-btn">Database</button>
           <div id="db-picker">
             <button class="db-opt active" data-src="flickr">📸 Flickr<span class="db-check">✓</span></button>
@@ -751,6 +840,19 @@
     </div>
 
     <div id="status"></div>
+  </div>
+</div>
+
+<!-- Webcam modal -->
+<div id="cam-modal">
+  <button id="cam-close-btn">×</button>
+  <div id="cam-modal-inner">
+    <img id="cam-img" src="" alt="" />
+    <div id="cam-info">
+      <div id="cam-title"></div>
+      <div id="cam-meta"></div>
+    </div>
+    <div id="cam-footer"></div>
   </div>
 </div>
 
@@ -1085,6 +1187,147 @@ auroraBtn.addEventListener("click", () => {
     labelLayer.clearLayers();
   }
   if (showAurora) startAurora(); else stopAurora();
+});
+
+// ─── Webcam layer ─────────────────────────────────────────────────────────────
+let showScenicCams = false, showRoadCams = false;
+let windyApiKey    = localStorage.getItem("windyApiKey") || "";
+const camLayer     = L.layerGroup().addTo(map);
+let camRefreshId   = null;
+let camImgRefreshId = null;
+
+const camBtn       = document.getElementById("cam-btn");
+const camPicker    = document.getElementById("cam-picker");
+const scenicRow    = document.getElementById("cam-scenic-row");
+const roadRow      = document.getElementById("cam-road-row");
+const windyInput   = document.getElementById("windy-key-input");
+if (windyApiKey) windyInput.value = windyApiKey;
+
+windyInput.addEventListener("change", () => {
+  windyApiKey = windyInput.value.trim();
+  localStorage.setItem("windyApiKey", windyApiKey);
+  if (showScenicCams) refreshWebcams();
+});
+
+function updateCamToggleUI() {
+  scenicRow.classList.toggle("on", showScenicCams);
+  roadRow.classList.toggle("on", showRoadCams);
+  camBtn.classList.toggle("has-active", showScenicCams || showRoadCams);
+}
+
+scenicRow.addEventListener("click", () => {
+  showScenicCams = !showScenicCams;
+  updateCamToggleUI(); refreshWebcams();
+});
+roadRow.addEventListener("click", () => {
+  showRoadCams = !showRoadCams;
+  updateCamToggleUI(); refreshWebcams();
+});
+camBtn.addEventListener("click", () => {
+  camPicker.classList.toggle("open");
+});
+document.addEventListener("click", e => {
+  if (!camBtn.contains(e.target) && !camPicker.contains(e.target))
+    camPicker.classList.remove("open");
+});
+
+function addCamMarker(lat, lng, title, imgUrl, type, extUrl) {
+  const icon = L.divIcon({
+    className: "",
+    html: `<div class="cam-marker cam-${type}">📹</div>`,
+    iconSize:[28,28], iconAnchor:[14,14]
+  });
+  L.marker([lat,lng], {icon, zIndexOffset:500})
+    .on("click", () => openCamModal(title, imgUrl, type, extUrl))
+    .addTo(camLayer);
+}
+
+async function loadVegvesen(bounds) {
+  const W=bounds.getWest().toFixed(4), S=bounds.getSouth().toFixed(4);
+  const E=bounds.getEast().toFixed(4), N=bounds.getNorth().toFixed(4);
+  try {
+    const r = await fetch(
+      `https://nvdbapiles-v3.atlas.vegvesen.no/vegobjekter/95?srid=wgs84&kartutsnitt=${W},${S},${E},${N}&segmentering=false&antall=200`,
+      { headers:{ 'Accept':'application/json' } }
+    );
+    const d = await r.json();
+    for (const obj of d.objekter || []) {
+      const wkt = obj.lokasjon?.geometri?.wkt || "";
+      const m = wkt.match(/POINT \(([0-9.-]+) ([0-9.-]+)\)/);
+      if (!m) continue;
+      const lng=parseFloat(m[1]), lat=parseFloat(m[2]);
+      const name = obj.egenskaper?.find(e=>e.navn==="Navn")?.verdi || `Kamera ${obj.id}`;
+      const imgUrl = `https://webkamera.atlas.vegvesen.no/public/kamera?id=${obj.id}&ts=${Date.now()}`;
+      addCamMarker(lat, lng, name, imgUrl, "road", `https://www.vegvesen.no/trafikk-og-vegkart/#Kamera?kameraId=${obj.id}`);
+    }
+  } catch(e) { console.warn("Vegvesen webcam:", e); }
+}
+
+async function loadWindy(bounds) {
+  if (!windyApiKey) return;
+  const S=bounds.getSouth().toFixed(4), W=bounds.getWest().toFixed(4);
+  const N=bounds.getNorth().toFixed(4), E=bounds.getEast().toFixed(4);
+  try {
+    const r = await fetch(
+      `https://api.windy.com/api/webcams/v2/list/bbox/${S},${W},${N},${E}?show=webcams:location,images,player`,
+      { headers:{ 'x-windy-api-key': windyApiKey } }
+    );
+    const d = await r.json();
+    for (const cam of d.result?.webcams || []) {
+      const {lat, lon:lng} = cam.location;
+      const img = cam.images?.current?.preview || cam.images?.daylight?.preview || "";
+      addCamMarker(lat, lng, cam.title, img, "scenic",
+        `https://windy.com/webcams/${cam.webcamId}`);
+    }
+  } catch(e) { console.warn("Windy webcam:", e); }
+}
+
+async function refreshWebcams() {
+  camLayer.clearLayers();
+  clearTimeout(camRefreshId);
+  if (!showScenicCams && !showRoadCams) return;
+  const b = map.getBounds();
+  const tasks = [];
+  if (showRoadCams)   tasks.push(loadVegvesen(b));
+  if (showScenicCams) tasks.push(loadWindy(b));
+  await Promise.all(tasks);
+  // Auto-refresh every 90s
+  camRefreshId = setTimeout(refreshWebcams, 90000);
+}
+
+map.on("moveend zoomend", () => {
+  if (showScenicCams || showRoadCams) {
+    clearTimeout(camRefreshId);
+    camRefreshId = setTimeout(refreshWebcams, 800);
+  }
+});
+
+// ── Webcam modal ──
+function openCamModal(title, imgUrl, type, extUrl) {
+  document.getElementById("cam-title").textContent = title;
+  document.getElementById("cam-meta").textContent = type === "road" ? "🚗 Statens Vegvesen" : "🌄 Windy Webcams";
+  document.getElementById("cam-footer").innerHTML =
+    `<a class="cam-link" href="${escHtml(extUrl)}" target="_blank" rel="noopener">Open source ↗</a>`;
+  const img = document.getElementById("cam-img");
+  img.src = imgUrl;
+  document.getElementById("cam-modal").classList.add("open");
+  // Refresh image every 60s
+  clearInterval(camImgRefreshId);
+  camImgRefreshId = setInterval(() => {
+    const fresh = imgUrl.includes("?") ? imgUrl.replace(/ts=\d+/, `ts=${Date.now()}`) : imgUrl + `?ts=${Date.now()}`;
+    img.src = fresh;
+  }, 60000);
+}
+
+document.getElementById("cam-close-btn").addEventListener("click", () => {
+  document.getElementById("cam-modal").classList.remove("open");
+  clearInterval(camImgRefreshId);
+});
+document.getElementById("cam-modal").addEventListener("click", e => {
+  if (e.target === document.getElementById("cam-modal")) {
+    document.getElementById("cam-modal").classList.remove("open");
+    clearInterval(camImgRefreshId);
+  }
 });
 
 // ─── Database picker ─────────────────────────────────────────────────────────
