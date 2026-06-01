@@ -137,10 +137,15 @@
       min-height: 34px; -webkit-user-select: none; user-select: none;
     }
     #heat-btn.active {
-      background: linear-gradient(135deg, #2a4ee8, #1a8fff);
-      border-color: #6b9fff; color: #fff; font-weight: 700;
-      box-shadow: 0 0 22px rgba(80,160,255,0.55), inset 0 1px 0 rgba(255,255,255,0.15);
-      text-shadow: 0 1px 6px rgba(0,80,255,0.4);
+      background: linear-gradient(135deg, #b83a00, #ff7700);
+      border-color: #ffaa44; color: #fff8ee; font-weight: 700;
+      box-shadow: 0 0 22px rgba(255,120,0,0.55), inset 0 1px 0 rgba(255,255,255,0.15);
+      text-shadow: 0 1px 6px rgba(160,50,0,0.5);
+      animation: heat-btn-pulse 3s ease-in-out infinite;
+    }
+    @keyframes heat-btn-pulse {
+      0%,100% { box-shadow: 0 0 14px rgba(255,100,0,0.45), 0 0 28px rgba(255,60,0,0.15); }
+      50%      { box-shadow: 0 0 26px rgba(255,160,0,0.65), 0 0 48px rgba(255,80,0,0.3); }
     }
     #heat-btn:active { opacity: 0.75; }
 
@@ -585,8 +590,8 @@
     <div id="bottom-container">
 
       <div id="heatmap-toggle-wrap">
-        <button id="aurora-btn">🌌 Aurora</button>
         <button id="heat-btn">Heatmap</button>
+        <button id="aurora-btn">Aurora</button>
       </div>
 
       <div id="map-bottom">
@@ -891,46 +896,49 @@ function resizeAuroraCanvas() {
 function renderAurora() {
   if (!showAurora || !auroraCoords.length) return;
   resizeAuroraCanvas();
-  const ctx  = auroraCtx;
-  const w    = auroraCanvas.width;
-  const h    = auroraCanvas.height;
+  const ctx = auroraCtx;
+  const w = auroraCanvas.width, h = auroraCanvas.height;
   ctx.clearRect(0, 0, w, h);
 
-  // 1° of latitude in pixels at current zoom — used for blob radius
-  const degPx = Math.abs(
-    map.latLngToContainerPoint([61, 10]).y -
-    map.latLngToContainerPoint([60, 10]).y
+  // Filter to visible bounds (same approach as buildHeatmap)
+  const bounds = map.getBounds();
+  const buf = 3;
+  const visible = auroraCoords.filter(([lng, lat, intensity]) =>
+    intensity >= 12 &&
+    lat >= bounds.getSouth() - buf && lat <= bounds.getNorth() + buf &&
+    lng >= bounds.getWest()  - buf && lng <= bounds.getEast()  + buf
   );
-  const blobR = Math.max(10, degPx * 2.5);
+  if (!visible.length) return;
 
-  ctx.globalCompositeOperation = "screen"; // additive glow
-  for (const [lng, lat, intensity] of auroraCoords) {
-    if (intensity < 4) continue;
+  // Normalise intensities to max visible value (same as heatmap log-scale)
+  let maxI = 1;
+  for (const [,,i] of visible) if (i > maxI) maxI = i;
+
+  // Dynamic radius matching heatmap's zoom-based formula
+  const { radius } = dynamicHeatOpts();
+  const blobR = radius * 3;
+
+  ctx.globalCompositeOperation = "screen";
+  for (const [lng, lat, intensity] of visible) {
+    const normI = intensity / maxI;                       // 0–1
+    const alpha = 0.04 + 0.55 * (normI * normI);         // quadratic — stays subtle at low values
     const pt = map.latLngToContainerPoint([lat, lng]);
-    if (pt.x < -blobR*2 || pt.x > w + blobR*2 ||
-        pt.y < -blobR*2 || pt.y > h + blobR*2) continue;
+    if (pt.x < -blobR || pt.x > w + blobR ||
+        pt.y < -blobR || pt.y > h + blobR) continue;
 
-    // Colour: green at low-mid, teal at mid, purple at high
-    let r = 0, g = 0, b = 0;
-    if (intensity < 40) {
-      // green
-      g = 200; r = 0; b = 80;
-    } else if (intensity < 70) {
-      // cyan-green
-      g = 230; r = 0; b = 160;
-    } else {
-      // pink-purple
-      r = 180; g = 60; b = 255;
-    }
-    const alpha = Math.min(0.85, intensity / 100 * 1.2);
+    // Green → teal → purple gradient by normalised intensity
+    let cr, cg, cb;
+    if (normI < 0.4)      { cr = 0;   cg = 200; cb = 80;  }
+    else if (normI < 0.75){ cr = 0;   cg = 220; cb = 200; }
+    else                  { cr = 160; cg = 60;  cb = 255; }
 
-    const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, blobR * 3);
-    grad.addColorStop(0,   `rgba(${r},${g},${b},${alpha})`);
-    grad.addColorStop(0.4, `rgba(${r},${g},${b},${alpha * 0.5})`);
-    grad.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+    const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, blobR);
+    grad.addColorStop(0,   `rgba(${cr},${cg},${cb},${alpha})`);
+    grad.addColorStop(0.5, `rgba(${cr},${cg},${cb},${alpha * 0.4})`);
+    grad.addColorStop(1,   `rgba(${cr},${cg},${cb},0)`);
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(pt.x, pt.y, blobR * 3, 0, Math.PI * 2);
+    ctx.arc(pt.x, pt.y, blobR, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalCompositeOperation = "source-over";
