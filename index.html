@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="ViralPin" />
+  <meta name="apple-mobile-web-app-title" content="CinePin" />
   <meta name="theme-color" content="#080d1a" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-  <title>ViralPin - Location Finder</title>
+  <title>CinePin - Location Finder</title>
   <meta name="description" content="Explore the most photographed spots in Norway — an interactive heatmap of photo locations powered by Flickr." />
   <script>const CONFIG={FLICKR_API_KEY:"07ca70504930cb812e9a2247e408525c"};</script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -31,6 +31,24 @@
       background: var(--bg); color: var(--text);
     }
 
+    /* ── Loading screen ── */
+    #loading-screen {
+      position: fixed; inset: 0; z-index: 10000;
+      background: #080d1a;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px;
+      transition: opacity 0.6s ease;
+    }
+    #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+    .loading-spinner {
+      width: 48px; height: 48px;
+      border: 3px solid #1a2550;
+      border-top-color: #3a5ae8;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    .loading-text { font-size: 0.85rem; color: #5a6898; letter-spacing: 0.08em; }
+
     /* ── Map fills full viewport ── */
     .main { position: fixed; inset: 0; overflow: hidden; }
     #map { width: 100%; height: 100%; z-index: 1; background: var(--bg); }
@@ -46,7 +64,41 @@
       text-shadow: 0 1px 10px rgba(0,0,0,0.9), 0 0 30px rgba(0,0,0,0.6);
     }
     #map-title span { color: #4d7fff; }
-    .leaflet-tile-pane { filter: saturate(0.65) brightness(0.97) hue-rotate(170deg); }
+    .leaflet-tile-pane { filter: saturate(0.75) brightness(1.18) hue-rotate(170deg); }
+
+    /* ── Location search bar ── */
+    #loc-search-wrap {
+      position: absolute;
+      top: calc(44px + env(safe-area-inset-top, 0px));
+      left: 50%; transform: translateX(-50%);
+      z-index: 850;
+      width: min(340px, calc(100vw - 80px));
+    }
+    #loc-search {
+      width: 100%; background: rgba(6,11,28,0.88); border: 1px solid #182040;
+      color: #c8ccdf; border-radius: 22px; padding: 9px 16px;
+      font-size: 0.82rem; outline: none; font-family: inherit;
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      -webkit-appearance: none;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+    }
+    #loc-search::placeholder { color: #3a4268; }
+    #loc-search:focus { border-color: #2a4aaf; }
+    #loc-results {
+      display: none; position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: rgba(6,11,28,0.95); border: 1px solid #182040; border-radius: 14px;
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      overflow: hidden; box-shadow: 0 6px 30px rgba(0,0,0,0.7);
+    }
+    #loc-results.open { display: block; }
+    .loc-result-item {
+      padding: 10px 16px; font-size: 0.78rem; color: #8898c8; cursor: pointer;
+      border-bottom: 1px solid #101830;
+    }
+    .loc-result-item:last-child { border-bottom: none; }
+    .loc-result-item:active { background: rgba(58,90,232,0.15); }
+    .loc-result-name { color: #c0d0ff; font-weight: 600; }
+    .loc-result-detail { font-size: 0.68rem; color: #4a5888; margin-top: 2px; }
 
     /* ── Bottom container: two stacked floating panels ── */
     #bottom-container {
@@ -143,7 +195,13 @@
     #tag-bar-wrap {
       flex: 1 1 0; min-width: 0; position: relative; overflow: hidden;
     }
-    /* Fade-out mask towards the right edge to hint scrollability */
+    /* Symmetric fade masks */
+    #tag-bar-wrap::before {
+      content: ""; pointer-events: none;
+      position: absolute; top: 0; left: 0; bottom: 0; width: 36px;
+      background: linear-gradient(to left, transparent, rgba(6,11,28,0.92));
+      z-index: 2;
+    }
     #tag-bar-wrap::after {
       content: ""; pointer-events: none;
       position: absolute; top: 0; right: 0; bottom: 0; width: 36px;
@@ -185,7 +243,9 @@
 
     /* ── Nav panel ── */
     #nav-panel {
-      display: none; position: absolute; top: 10px; left: 50%;
+      display: none; position: absolute;
+      top: calc(52px + env(safe-area-inset-top, 0px));
+      left: 50%;
       transform: translateX(-50%); z-index: 900;
       background: var(--panel); border: 1px solid #1a3080;
       border-radius: 14px; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
@@ -197,6 +257,56 @@
     #nav-dest-name { font-size: 0.8rem; font-weight: 600; color: #c0d0ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #nav-details { font-size: 0.7rem; color: #5a78c0; margin-top: 2px; }
     #nav-stop { background: none; border: 1px solid #2a3a6a; color: #8898c0; border-radius: 6px; padding: 5px 10px; font-size: 0.76rem; cursor: pointer; flex-shrink: 0; min-height: 32px; }
+
+    /* ── My Locations button ── */
+    #my-locations-btn {
+      position: absolute;
+      top: calc(10px + env(safe-area-inset-top, 0px));
+      right: calc(10px + env(safe-area-inset-right, 0px));
+      z-index: 810;
+      background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
+      border-radius: 20px; padding: 6px 14px; font-size: 0.76rem; font-weight: 500;
+      cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      min-height: 34px; -webkit-user-select: none; user-select: none;
+      transition: background 0.12s, color 0.12s;
+    }
+    #my-locations-btn:active { opacity: 0.7; }
+
+    /* ── My Locations modal ── */
+    #my-locations-modal {
+      display: none; position: fixed; inset: 0; z-index: 9000;
+      background: rgba(0,0,0,0.92); flex-direction: column;
+      padding: calc(60px + env(safe-area-inset-top, 0px)) 16px calc(30px + env(safe-area-inset-bottom, 0px));
+    }
+    #my-locations-modal.open { display: flex; }
+    .ml-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .ml-title { font-size: 1rem; font-weight: 700; color: #dde2f5; }
+    .ml-header-actions { display: flex; gap: 8px; }
+    #ml-new-folder, #ml-close {
+      background: rgba(10,20,60,0.6); border: 1px solid #1a2e7a; color: #7c9fff;
+      border-radius: 8px; padding: 6px 12px; font-size: 0.76rem; cursor: pointer;
+      font-family: inherit; min-height: 36px;
+    }
+    #ml-close { background: none; border-color: #2a3a6a; color: #8898c0; }
+    #ml-folders { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; flex: 1; }
+    .ml-folder { background: rgba(6,11,28,0.7); border: 1px solid #182040; border-radius: 14px; overflow: hidden; }
+    .ml-folder-header {
+      padding: 10px 14px; font-size: 0.75rem; font-weight: 700; color: #6878b0;
+      text-transform: uppercase; letter-spacing: 0.06em; background: rgba(20,30,70,0.4);
+    }
+    .ml-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; padding: 10px; }
+    .ml-item {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      cursor: pointer; border-radius: 10px; padding: 6px;
+      transition: background 0.1s;
+    }
+    .ml-item:active { background: rgba(58,90,232,0.15); }
+    .ml-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #182040; }
+    .ml-item-name { font-size: 0.62rem; color: #7888b0; text-align: center; line-height: 1.3; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ml-empty { padding: 24px; text-align: center; color: #3a4268; font-size: 0.8rem; }
 
     /* ── Cluster markers ── */
     .cm { position: relative; cursor: pointer; }
@@ -261,10 +371,18 @@
     /* ── Lightbox weather ── */
     #lb-weather { margin: 6px 0 2px; text-align: left; }
     #lb-sun {
-      display: flex; gap: 16px; justify-content: center;
-      font-size: 0.75rem; color: #8898c8; margin-bottom: 8px;
+      display: flex; flex-direction: column; gap: 3px;
+      font-size: 0.74rem; color: #8898c8; margin-bottom: 10px;
     }
-    #lb-sun span { display: flex; align-items: center; gap: 4px; }
+    .lb-sun-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 3px 6px; border-radius: 7px;
+    }
+    .lb-sun-row.golden { background: rgba(255,180,40,0.08); }
+    .lb-sun-row.blue   { background: rgba(60,120,255,0.08); }
+    .lb-sun-row .sr-label { color: #5a6898; }
+    .lb-sun-row .sr-val   { color: #c0d0ff; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .lb-sun-divider { height: 1px; background: #1a2448; margin: 3px 0; }
     #lb-hourly-wrap {
       overflow-x: auto; -webkit-overflow-scrolling: touch;
       scrollbar-width: none; margin-bottom: 6px;
@@ -286,10 +404,17 @@
     .lb-d-item {
       display: flex; align-items: center; gap: 8px;
       padding: 4px 8px; border-radius: 8px; background: rgba(20,30,70,0.4);
+      cursor: pointer; transition: background 0.1s;
     }
+    .lb-d-item:active { background: rgba(58,90,232,0.15); }
+    .lb-d-item.expanded { background: rgba(20,30,80,0.6); }
     .lb-d-day { font-size: 0.68rem; color: #5a6898; min-width: 30px; }
     .lb-d-icon { font-size: 0.95rem; }
     .lb-d-range { font-size: 0.68rem; color: #8898c0; margin-left: auto; }
+    .lb-d-hourly { display: none; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding: 4px 0 2px; }
+    .lb-d-hourly::-webkit-scrollbar { display: none; }
+    .lb-d-hourly.open { display: block; }
+    .lb-d-hourly-inner { display: flex; gap: 4px; min-width: max-content; }
     #lb-forecast-toggle {
       background: none; border: 1px solid #1e2a50; color: #4a5888;
       border-radius: 8px; padding: 4px 10px; font-size: 0.65rem;
@@ -302,10 +427,34 @@
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92);
       z-index: 9999; flex-direction: column;
       overflow-y: auto; -webkit-overflow-scrolling: touch;
-      padding: 60px 20px 30px;
+      padding: 60px 20px calc(80px + env(safe-area-inset-bottom, 0px));
+      transition: transform 0.25s ease, opacity 0.25s ease;
     }
     #lightbox.open { display: flex; }
-    #lightbox img { max-width: 92vw; max-height: 50vh; border-radius: 10px; object-fit: contain; flex-shrink: 0; align-self: center; margin-bottom: 14px; }
+    #lightbox-img-wrap {
+      position: relative; align-self: center; margin-bottom: 14px;
+      max-width: 92vw;
+    }
+    #lightbox img { max-width: 92vw; max-height: 50vh; border-radius: 10px; object-fit: contain; flex-shrink: 0; display: block; }
+    /* Gallery nav arrows */
+    #lb-gallery-nav { display: none; }
+    #lb-gallery-nav.visible { display: block; }
+    .lb-arr {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 38px; height: 38px; border-radius: 50%;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.12);
+      color: #fff; font-size: 1.1rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.1s;
+    }
+    .lb-arr:active { background: rgba(58,90,232,0.5); }
+    #lb-prev { left: -18px; }
+    #lb-next { right: -18px; }
+    #lb-gallery-count {
+      text-align: center; font-size: 0.65rem; color: #4a5888;
+      margin-top: 4px; display: none;
+    }
+    #lb-gallery-count.visible { display: block; }
     #lightbox-info { text-align: center; max-width: 500px; width: 100%; align-self: center; }
     #lightbox-title { font-size: 0.9rem; margin-bottom: 10px; color: #e8eaf0; }
     .lb-links { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
@@ -316,11 +465,18 @@
       min-height: 36px; display: flex; align-items: center;
     }
     .lb-links a:active, .lb-links button:active { opacity: 0.7; }
-    #nav-details { font-size: 0.7rem; color: #5a78c0; margin-top: 4px; line-height: 1.5; }
+    #lb-save.saved { color: #ffd060; border-color: #7a5a10; background: rgba(40,30,10,0.6); }
     #lightbox-close {
-      position: absolute; top: 14px; right: 16px; font-size: 2rem;
-      background: none; border: none; color: #888; cursor: pointer; padding: 4px; min-width: 40px; min-height: 40px;
+      position: fixed;
+      bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+      left: 50%; transform: translateX(-50%);
+      background: rgba(10,20,60,0.75); border: 1px solid #1a2e7a; color: #7c9fff;
+      border-radius: 20px; padding: 10px 28px; font-size: 0.8rem; font-weight: 600;
+      cursor: pointer; font-family: inherit; min-height: 40px;
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      z-index: 10001;
     }
+    #lightbox-close:active { opacity: 0.7; }
 
     #status {
       position: absolute; bottom: 6px; right: 10px; z-index: 700;
@@ -347,10 +503,22 @@
 </head>
 <body>
 
+<!-- Loading screen -->
+<div id="loading-screen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Loading…</div>
+</div>
+
 <div class="main">
   <div id="map">
 
-    <div id="map-title"><span>ViralPin</span> - Location Finder</div>
+    <div id="map-title"><span>CinePin</span> - Location Finder</div>
+
+    <!-- Location search -->
+    <div id="loc-search-wrap">
+      <input id="loc-search" type="text" placeholder="Search Location" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      <div id="loc-results"></div>
+    </div>
 
     <!-- Navigation banner -->
     <div id="nav-panel">
@@ -361,6 +529,9 @@
       </div>
       <button id="nav-stop">✕ Stop</button>
     </div>
+
+    <!-- My Locations button -->
+    <button id="my-locations-btn">⭐ My Locations</button>
 
     <!-- Bottom panel -->
     <div id="bottom-container">
@@ -375,7 +546,7 @@
         <div id="pop-section">
           <span class="pop-label">Popularity</span>
           <button class="slider-adj" id="slider-minus">−</button>
-          <input type="range" id="engagement-slider" min="1" max="60" value="30" step="1" />
+          <input type="range" id="engagement-slider" min="0" max="100" value="50" step="1" />
           <button class="slider-adj" id="slider-plus">+</button>
           <span id="slider-value">Top 30</span>
         </div>
@@ -418,9 +589,27 @@
   </div>
 </div>
 
+<!-- My Locations modal -->
+<div id="my-locations-modal">
+  <div class="ml-header">
+    <span class="ml-title">⭐ My Locations</span>
+    <div class="ml-header-actions">
+      <button id="ml-new-folder">+ New Folder</button>
+      <button id="ml-close">✕</button>
+    </div>
+  </div>
+  <div id="ml-folders"></div>
+</div>
+
 <div id="lightbox">
-  <button id="lightbox-close">×</button>
-  <img id="lightbox-img" src="" alt="" />
+  <div id="lightbox-img-wrap">
+    <img id="lightbox-img" src="" alt="" />
+    <div id="lb-gallery-nav">
+      <button class="lb-arr" id="lb-prev">‹</button>
+      <button class="lb-arr" id="lb-next">›</button>
+    </div>
+  </div>
+  <div id="lb-gallery-count"></div>
   <div id="lightbox-info">
     <div id="lightbox-title"></div>
     <div id="lb-weather">
@@ -434,8 +623,10 @@
       <a id="lb-gmaps" href="#" target="_blank" rel="noopener">Google Maps</a>
       <a id="lb-apmaps" href="#" target="_blank" rel="noopener">Apple Maps</a>
       <a id="lb-streetview" href="#" target="_blank" rel="noopener">Street View</a>
+      <button id="lb-save">⭐ Save Location</button>
     </div>
   </div>
+  <button id="lightbox-close">Close</button>
 </div>
 
 <script>
@@ -444,6 +635,12 @@ const map = L.map("map", { zoomControl: true, tap: true }).setView([65.0, 15.0],
 L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
   attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
   subdomains: "abcd", maxZoom: 20, detectRetina: true,
+}).addTo(map);
+
+// Labels overlay (crisp city labels)
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png", {
+  subdomains: "abcd", maxZoom: 20, detectRetina: true, opacity: 1, zIndex: 2,
+  pane: map.getPanes().overlayPane,
 }).addTo(map);
 
 // Navy tint overlay pane
@@ -455,7 +652,6 @@ let allPhotos    = [];
 let photoById    = new Map();
 let heatLayer    = null;
 let clusterLayer = L.layerGroup();
-// Label pane sits above cluster markers (default marker pane z-index is 600)
 map.createPane("labelPane").style.zIndex = "640";
 let labelLayer   = L.layerGroup().addTo(map);
 let routeLayer   = null;
@@ -465,13 +661,21 @@ let topN         = 30;
 let userMovedSlider = false;
 let lastUserPos  = null;
 let currentLbPhoto = null;
-let labelGen     = 0;         // cancels in-flight geocoding on data change
+let labelGen     = 0;
+
+// Gallery state
+let galleryPhotos = [];
+let galleryIndex  = 0;
 
 // Perf: debounce timers
 let renderTimer = null, fetchTimer = null, heatTimer = null, labelTimer = null;
+let heatLastRun = 0;
 const fetchedKeys = new Set();
 const geocodeCache = new Map();
 const MIN_FETCH_ZOOM = 4;
+
+// Full weather data storage for day-click hourly
+let fullWeatherData = null;
 
 // ─── Quality filter ───────────────────────────────────────────────────────────
 const BAD_WORDS = new Set(["selfie","portrait","baby","wedding","graduation",
@@ -508,6 +712,9 @@ function buildClusters(photos, zoom) {
 
 // ─── Render clusters (rAF-gated) ─────────────────────────────────────────────
 let rafPending = false;
+let lastRenderBoundsKey = "";
+let lastRenderZoom = -1;
+
 function scheduleRender() {
   if (rafPending) return;
   rafPending = true;
@@ -518,6 +725,13 @@ function renderClusters() {
   clusterLayer.clearLayers();
   if (!allPhotos.length) return;
   const bounds = map.getBounds(), zoom = map.getZoom();
+
+  // Skip re-render if bounds and zoom haven't changed significantly
+  const boundsKey = `${bounds.getSouth().toFixed(2)},${bounds.getNorth().toFixed(2)},${bounds.getWest().toFixed(2)},${bounds.getEast().toFixed(2)}`;
+  if (boundsKey === lastRenderBoundsKey && zoom === lastRenderZoom) return;
+  lastRenderBoundsKey = boundsKey;
+  lastRenderZoom = zoom;
+
   const buf = Math.max(cellSize(zoom) * 1.5, 0.05);
   const S = bounds.getSouth()-buf, N = bounds.getNorth()+buf,
         W = bounds.getWest()-buf,  E = bounds.getEast()+buf;
@@ -529,7 +743,6 @@ function renderClusters() {
   inView.sort((a,b) => b.views - a.views);
   const filtered = inView.slice(0, topN);
 
-  const frag = document.createDocumentFragment();
   for (const cl of buildClusters(filtered, zoom)) {
     const single = cl.photos.length === 1;
     const sz = single ? 44 : 56;
@@ -549,16 +762,19 @@ function fmt(n) { return n>=1000?(n/1000).toFixed(1).replace(".0","")+"k":String
 // ─── Heatmap ──────────────────────────────────────────────────────────────────
 const HEAT_GRADIENT = {0:"#0000cc",0.3:"#0088ff",0.55:"#00ffcc",0.75:"#ffdd00",0.9:"#ff4400",1:"#ff0000"};
 
-// Radius grows with zoom so each spot covers a consistent geographic area.
-// At low zoom many points overlap — keeping radius small prevents giant blobs.
 function dynamicHeatOpts() {
   const zoom = map.getZoom();
-  // Ramp from r=10 at zoom 4 up to r=36 at zoom 16, clamped at extremes.
   const radius = Math.max(8, Math.min(40, Math.round(10 + (zoom - 4) * 2.2)));
   return { radius, blur: Math.round(radius * 0.65) };
 }
 
 function buildHeatmap() {
+  const now = Date.now();
+  if (now - heatLastRun < 300) {
+    scheduleHeatmap(); return;
+  }
+  heatLastRun = now;
+
   if (!showHeat || !allPhotos.length) {
     if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
     return;
@@ -580,7 +796,6 @@ function buildHeatmap() {
   const { radius, blur } = dynamicHeatOpts();
   if (heatLayer) {
     heatLayer.setLatLngs(pts);
-    // Update options if zoom changed (setOptions isn't in the public API; recreate cheaply)
     heatLayer.options.radius = radius;
     heatLayer.options.blur   = blur;
     heatLayer.redraw();
@@ -593,9 +808,6 @@ function buildHeatmap() {
   scheduleLabels();
 }
 
-// During pinch-zoom Leaflet CSS-transforms the canvas but doesn't redraw pixels.
-// Redraw each animation frame so the heatmap tracks zoom in real time.
-// We skip `move` — panning is handled correctly by Leaflet's own transform.
 let _heatRaf = null;
 map.on("zoom", () => {
   if (!heatLayer) return;
@@ -619,38 +831,28 @@ heatBtn.addEventListener("click", () => {
 });
 
 // ─── Top-5 location labels ────────────────────────────────────────────────────
-// Map Leaflet zoom → Nominatim zoom (controls specificity of reverse geocode)
 function nominatimZoom(z) {
-  if (z >= 16) return 18;   // building / specific peak / viewpoint
-  if (z >= 13) return 16;   // named feature / street
-  if (z >= 10) return 13;   // suburb / neighbourhood
-  if (z >=  7) return 11;   // city / town
-  return 8;                  // region / county
+  if (z >= 16) return 18;
+  if (z >= 13) return 16;
+  if (z >= 10) return 13;
+  if (z >=  7) return 11;
+  return 8;
 }
 
-// Pick the best name field given map zoom level
 function extractName(d, mapZoom) {
   const a = d.address || {};
   if (mapZoom >= 15) {
-    // Very close: exact feature name first (peak, viewpoint, building, road)
-    return d.name ||
-           a.amenity || a.tourism || a.natural ||
+    return d.name || a.amenity || a.tourism || a.natural ||
            a.historic || a.leisure || a.man_made ||
-           a.building || a.road ||
-           a.neighbourhood || a.suburb || "";
+           a.building || a.road || a.neighbourhood || a.suburb || "";
   }
   if (mapZoom >= 12) {
-    // Medium-close: named feature or neighbourhood
-    return d.name ||
-           a.tourism || a.natural || a.leisure ||
-           a.neighbourhood || a.suburb ||
-           a.village || a.town || "";
+    return d.name || a.tourism || a.natural || a.leisure ||
+           a.neighbourhood || a.suburb || a.village || a.town || "";
   }
   if (mapZoom >= 8) {
-    // City/town level
     return a.village || a.town || a.city_district || a.city || d.name || "";
   }
-  // Zoomed out: county / state
   return a.county || a.state || a.country || d.name || "";
 }
 
@@ -670,9 +872,25 @@ async function geocode(lat, lng, mapZoom) {
   } catch { return ""; }
 }
 
+// Reverse geocode for lightbox title (city/town at zoom 13)
+async function reverseGeocodeCity(lat, lng) {
+  const key = `city:${lat.toFixed(3)},${lng.toFixed(3)}`;
+  if (geocodeCache.has(key)) return geocodeCache.get(key);
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=13&addressdetails=1`,
+      { headers: { "Accept-Language": "en" } }
+    );
+    const d = await r.json();
+    const a = d.address || {};
+    const name = a.village || a.town || a.city_district || a.city || a.county || d.name || "";
+    geocodeCache.set(key, name);
+    return name;
+  } catch { return ""; }
+}
+
 function scheduleLabels() {
   clearTimeout(labelTimer);
-  // Short delay after heatmap build; longer after map move (let tiles settle)
   labelTimer = setTimeout(updateLocationLabels, 800);
 }
 
@@ -699,7 +917,6 @@ async function updateLocationLabels() {
   );
   if (!inView.length) { await fadeOutLabels(); return; }
 
-  // Cluster visible photos, pick top-5 centroids
   const CELL = Math.max(cellSize(zoom) * 0.5, 0.01);
   const grid  = new Map();
   for (const p of inView) {
@@ -713,14 +930,18 @@ async function updateLocationLabels() {
     .slice(0, 5)
     .map(g => ({ lat:g.lat/g.n, lng:g.lng/g.n }));
 
-  // Fade out old labels then repopulate
   await fadeOutLabels();
   if (gen !== labelGen) return;
 
   for (let i = 0; i < top5.length; i++) {
     if (gen !== labelGen) return;
     const {lat, lng} = top5[i];
-    const name = await geocode(lat, lng, zoom);
+    // Use requestIdleCallback for geocoding to avoid blocking UI
+    const name = await new Promise(resolve => {
+      const cb = () => geocode(lat, lng, zoom).then(resolve);
+      if (typeof requestIdleCallback === "function") requestIdleCallback(cb);
+      else setTimeout(cb, 0);
+    });
     if (gen !== labelGen) return;
     if (!name) continue;
 
@@ -729,19 +950,44 @@ async function updateLocationLabels() {
       html: `<div class="loc-label"><span class="loc-dot"></span>${escHtml(name)}</div>`,
       iconSize: [0,0], iconAnchor: [0,0],
     });
-    // Use the dedicated label pane so labels render above photo thumbnails
     L.marker([lat, lng], { icon, interactive:false, pane:"labelPane" })
       .addTo(labelLayer);
 
-    if (i < top5.length - 1) await sleep(1100); // Nominatim: max 1 req/s
+    if (i < top5.length - 1) await sleep(1100);
   }
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ─── Slider (reversed via scaleX(-1)) ────────────────────────────────────────
+// ─── Slider: non-linear (0→50: all→30, 50→100: 30→1) ──────────────────────
 const slider    = document.getElementById("engagement-slider");
 const sliderLbl = document.getElementById("slider-value");
+
+// Map slider position (0–100) to topN
+function sliderPosToTopN(pos, maxN) {
+  if (pos <= 50) {
+    // 0 = all (maxN), 50 = 30
+    const t = pos / 50; // 0→1
+    return Math.round(maxN + t * (30 - maxN));
+  } else {
+    // 50 = 30, 100 = 1
+    const t = (pos - 50) / 50; // 0→1
+    return Math.round(30 + t * (1 - 30));
+  }
+}
+
+// Map topN to slider position
+function topNToSliderPos(n, maxN) {
+  if (n >= maxN) return 0;
+  if (n <= 1) return 100;
+  if (n >= 30) {
+    // between maxN and 30: pos 0→50
+    return Math.round(50 * (maxN - n) / (maxN - 30));
+  } else {
+    // between 30 and 1: pos 50→100
+    return Math.round(50 + 50 * (30 - n) / 29);
+  }
+}
 
 function rescaleSlider() {
   const b = map.getBounds(), buf = 0.1;
@@ -749,31 +995,48 @@ function rescaleSlider() {
   for (const p of allPhotos) {
     if (p.lat>=b.getSouth()-buf&&p.lat<=b.getNorth()+buf&&p.lng>=b.getWest()-buf&&p.lng<=b.getEast()+buf) n++;
   }
-  slider.max = Math.max(n, 60);
-  if (!userMovedSlider) { slider.value=30; topN=30; sliderLbl.textContent="Top 30"; }
+  const maxN = Math.max(n, 60);
+  slider.dataset.maxN = maxN;
+  if (!userMovedSlider) {
+    topN = 30;
+    slider.value = topNToSliderPos(30, maxN);
+    sliderLbl.textContent = "Top 30";
+  }
+}
+
+function applyTopNFromSlider(pos) {
+  const maxN = parseInt(slider.dataset.maxN || "60");
+  topN = Math.max(1, sliderPosToTopN(pos, maxN));
+  sliderLbl.textContent = topN >= maxN ? "All" : `Top ${topN}`;
+  userMovedSlider = true;
+  lastRenderBoundsKey = ""; // force re-render
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(scheduleRender, 50);
+}
+
+function applyTopN(val) {
+  const maxN = parseInt(slider.dataset.maxN || "60");
+  topN = Math.max(1, Math.min(maxN, val));
+  slider.value = topNToSliderPos(topN, maxN);
+  sliderLbl.textContent = topN >= maxN ? "All" : `Top ${topN}`;
+  userMovedSlider = true;
+  lastRenderBoundsKey = "";
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(scheduleRender, 50);
 }
 
 function sliderStep() {
-  if (topN <=  10) return 1;
-  if (topN <=  30) return 1;
+  if (topN <= 10) return 1;
+  if (topN <= 30) return 1;
   if (topN <= 100) return 5;
   if (topN <= 300) return 10;
   return 25;
 }
 
-function applyTopN(val) {
-  topN = Math.max(1, Math.min(parseInt(slider.max), val));
-  slider.value = topN;
-  sliderLbl.textContent = topN >= parseInt(slider.max) ? "All" : `Top ${topN}`;
-  userMovedSlider = true;
-  clearTimeout(renderTimer);
-  renderTimer = setTimeout(scheduleRender, 50);
-}
-
-slider.addEventListener("input", () => applyTopN(parseInt(slider.value)));
-// "+" = more focused (fewer, more popular) | "−" = broader (more photos)
+slider.addEventListener("input", () => applyTopNFromSlider(parseInt(slider.value)));
 document.getElementById("slider-minus").addEventListener("click", () => applyTopN(topN + sliderStep()));
 document.getElementById("slider-plus").addEventListener("click",  () => applyTopN(topN - sliderStep()));
+slider.dataset.maxN = "60";
 
 // ─── Flickr API ───────────────────────────────────────────────────────────────
 async function flickrFetch(extra) {
@@ -829,12 +1092,12 @@ async function fetchBox(bounds, pages=3) {
     }
     if (added > 0) {
       scheduleHeatmap(); rescaleSlider(); scheduleRender();
-      document.getElementById("count-badge").textContent = `${allPhotos.length} spots`;
+      document.getElementById("count-badge") && (document.getElementById("count-badge").textContent = `${allPhotos.length} spots`);
     }
   } catch(e) { console.warn("fetchBox:", e.message); }
 }
 
-// Silently preload surrounding 5×5 grid (radius=2, 24 tiles)
+// Silently preload surrounding 5×5 grid
 function preloadSurrounding() {
   if (map.getZoom() < MIN_FETCH_ZOOM + 2) return;
   const b = map.getBounds();
@@ -849,6 +1112,16 @@ function preloadSurrounding() {
   }
 }
 
+// ─── Loading screen ───────────────────────────────────────────────────────────
+let loadingHidden = false;
+function hideLoadingScreen() {
+  if (loadingHidden) return;
+  loadingHidden = true;
+  const ls = document.getElementById("loading-screen");
+  ls.classList.add("fade-out");
+  setTimeout(() => { ls.style.display = "none"; }, 650);
+}
+
 // ─── Initial area load ────────────────────────────────────────────────────────
 async function loadArea() {
   const status = document.getElementById("status");
@@ -861,16 +1134,22 @@ async function loadArea() {
     for (let p=1; p<=4; p++) {
       const pg = await flickrFetch({bbox, page:p});
       for (const ph of pg.photo) ingestPhoto(ph);
-      if (p===1) { buildHeatmap(); rescaleSlider(); scheduleRender(); }
-      else        { scheduleHeatmap(); }
-      document.getElementById("count-badge").textContent = `${allPhotos.length} spots`;
+      if (p===1) {
+        buildHeatmap(); rescaleSlider(); scheduleRender();
+        hideLoadingScreen();
+      } else {
+        scheduleHeatmap();
+      }
       status.textContent = `${allPhotos.length} spots`;
       if (p >= pg.pages) break;
     }
     rescaleSlider(); scheduleRender();
     status.textContent = "";
     preloadSurrounding();
-  } catch(err) { status.textContent = `⚠ ${err.message}`; }
+  } catch(err) {
+    hideLoadingScreen();
+    status.textContent = `⚠ ${err.message}`;
+  }
 }
 
 // ─── Map events ───────────────────────────────────────────────────────────────
@@ -881,7 +1160,6 @@ map.on("moveend zoomend", () => {
   fetchTimer = setTimeout(() => fetchBox(map.getBounds(),3).then(preloadSurrounding), 700);
   if (showHeat) scheduleHeatmap();
 });
-// Labels trigger geocoding (slow network); only refresh when zoom level changes
 map.on("zoomend", () => { if (showHeat) scheduleLabels(); });
 
 // ─── Tag pills ────────────────────────────────────────────────────────────────
@@ -947,14 +1225,73 @@ document.getElementById("add-tag-btn").addEventListener("click", () => {
 });
 document.getElementById("do-search-btn").addEventListener("click", fireSearch);
 
+// ─── Location search (Nominatim) ─────────────────────────────────────────────
+const locSearchInput = document.getElementById("loc-search");
+const locResultsEl   = document.getElementById("loc-results");
+let locDebounce = null;
+
+locSearchInput.addEventListener("input", () => {
+  clearTimeout(locDebounce);
+  locDebounce = setTimeout(() => doLocSearch(locSearchInput.value.trim()), 400);
+});
+locSearchInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") { clearTimeout(locDebounce); doLocSearch(locSearchInput.value.trim()); }
+  if (e.key === "Escape") { locResultsEl.classList.remove("open"); locSearchInput.blur(); }
+});
+document.addEventListener("click", e => {
+  if (!document.getElementById("loc-search-wrap").contains(e.target)) {
+    locResultsEl.classList.remove("open");
+  }
+});
+
+async function doLocSearch(q) {
+  if (!q) { locResultsEl.classList.remove("open"); return; }
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5`, {
+      headers: { "Accept-Language": "en" }
+    });
+    const results = await r.json();
+    if (!results.length) {
+      locResultsEl.innerHTML = `<div class="loc-result-item"><span class="loc-result-name">No results</span></div>`;
+      locResultsEl.classList.add("open");
+      return;
+    }
+    locResultsEl.innerHTML = results.map((res, i) => {
+      const parts = res.display_name.split(",");
+      const name = parts[0].trim();
+      const detail = parts.slice(1, 3).join(",").trim();
+      return `<div class="loc-result-item" data-idx="${i}" data-lat="${res.lat}" data-lon="${res.lon}" data-bb='${JSON.stringify(res.boundingbox)}'>
+        <div class="loc-result-name">${escHtml(name)}</div>
+        <div class="loc-result-detail">${escHtml(detail)}</div>
+      </div>`;
+    }).join("");
+    locResultsEl.classList.add("open");
+    locResultsEl.querySelectorAll(".loc-result-item[data-lat]").forEach(el => {
+      el.addEventListener("click", () => {
+        const lat = parseFloat(el.dataset.lat);
+        const lon = parseFloat(el.dataset.lon);
+        const bb = JSON.parse(el.dataset.bb); // [south,north,west,east]
+        locResultsEl.classList.remove("open");
+        locSearchInput.value = el.querySelector(".loc-result-name").textContent;
+        if (bb && bb.length === 4) {
+          map.fitBounds([[parseFloat(bb[0]),parseFloat(bb[2])],[parseFloat(bb[1]),parseFloat(bb[3])]]);
+        } else {
+          map.flyTo([lat, lon], 10, {duration: 1.2});
+        }
+        setTimeout(() => loadArea(), 800);
+      });
+    });
+  } catch(e) { console.warn("loc search:", e); }
+}
+
 // ─── Clear ────────────────────────────────────────────────────────────────────
 function clearAll() {
   allPhotos=[]; photoById.clear(); fetchedKeys.clear();
   clusterLayer.clearLayers(); clusterLayer.remove();
   labelLayer.clearLayers(); ++labelGen;
   if (heatLayer) { map.removeLayer(heatLayer); heatLayer=null; }
-  document.getElementById("count-badge").textContent="";
   userMovedSlider=false;
+  lastRenderBoundsKey="";
 }
 
 // ─── Navigation (OSRM) ───────────────────────────────────────────────────────
@@ -985,7 +1322,6 @@ async function navigateTo(ph) {
     map.fitBounds(routeLayer.getBounds(),{paddingTopLeft:[20,80],paddingBottomRight:[20,120]});
     const km = (route.distance/1000).toFixed(1);
     const carTime  = fmtDuration(route.duration);
-    // Walking speed ~5 km/h along road distance (OSRM foot profile is unreliable on public server)
     const walkSecs = (route.distance / 1000) / 5 * 3600;
     const footTime = fmtDuration(walkSecs);
     document.getElementById("nav-details").innerHTML =
@@ -998,7 +1334,7 @@ document.getElementById("nav-stop").addEventListener("click",()=>{
   if (routeLayer) { map.removeLayer(routeLayer); routeLayer=null; }
 });
 
-// ─── Lightbox ────────────────────────────────────────────────────────────────
+// ─── Weather helpers ──────────────────────────────────────────────────────────
 const WX_ICON = c => {
   if (c === 0) return "☀️";
   if (c <= 3)  return "🌤";
@@ -1010,8 +1346,8 @@ const WX_ICON = c => {
   return "⛈";
 };
 
-function fmtTime(iso) {
-  const d = new Date(iso);
+function fmtTime(isoOrDate) {
+  const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
@@ -1019,6 +1355,42 @@ function fmtDay(iso) {
   return new Date(iso).toLocaleDateString([], { weekday: "short" });
 }
 
+function addMinutes(isoOrDate, mins) {
+  const d = isoOrDate instanceof Date ? new Date(isoOrDate) : new Date(isoOrDate);
+  d.setMinutes(d.getMinutes() + mins);
+  return d;
+}
+
+// ─── Moon phase ───────────────────────────────────────────────────────────────
+function moonPhase() {
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth()+1, day = now.getDate();
+  let jd = 367*year - Math.floor(7*(year+Math.floor((month+9)/12))/4) + Math.floor(275*month/9) + day + 1721013.5;
+  const cycle = (jd - 2451550.1) / 29.53058867;
+  const phase = cycle - Math.floor(cycle);
+  const pct = Math.round(phase <= 0.5 ? phase*200 : (1-phase)*200);
+  const emojis = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘','🌑'];
+  const emoji = emojis[Math.round(phase * 8) % 9];
+  return { emoji, pct, phase };
+}
+
+// ─── Aurora fetch ─────────────────────────────────────────────────────────────
+async function fetchAurora() {
+  try {
+    const r = await fetch("https://services.swpc.noaa.gov/json/planetary_k_index_1m.json");
+    const d = await r.json();
+    if (!d || !d.length) return null;
+    const kp = d[d.length - 1].kp_index;
+    let label;
+    if (kp < 2)      label = "None expected";
+    else if (kp < 4) label = "Weak possibility";
+    else if (kp < 6) label = "Moderate (visible in Norway!)";
+    else             label = "Strong aurora expected!";
+    return { kp, label };
+  } catch { return null; }
+}
+
+// ─── Weather loader ───────────────────────────────────────────────────────────
 async function loadWeather(lat, lng) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
     `&hourly=temperature_2m,weather_code&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min` +
@@ -1026,14 +1398,47 @@ async function loadWeather(lat, lng) {
   try {
     const r = await fetch(url);
     const d = await r.json();
+    fullWeatherData = d;
 
-    // Sunrise / sunset today
-    const rise = fmtTime(d.daily.sunrise[0]);
-    const set  = fmtTime(d.daily.sunset[0]);
-    document.getElementById("lb-sun").innerHTML =
-      `<span>🌅 ${rise}</span><span>🌇 ${set}</span>`;
+    // Sun times
+    const riseDate = new Date(d.daily.sunrise[0]);
+    const setDate  = new Date(d.daily.sunset[0]);
 
-    // Next 24 h hourly (every 3 hrs, starting from current hour)
+    const blueRiseStart = addMinutes(riseDate, -30);
+    const blueRiseEnd   = riseDate;
+    const goldenRiseStart = riseDate;
+    const goldenRiseEnd   = addMinutes(riseDate, 60);
+    const goldenSetStart  = addMinutes(setDate, -60);
+    const goldenSetEnd    = setDate;
+    const blueSetStart    = setDate;
+    const blueSetEnd      = addMinutes(setDate, 30);
+
+    const moon = moonPhase();
+
+    // Aurora (async, non-blocking)
+    const auroraPromise = fetchAurora();
+
+    const sunHtml = `
+      <div class="lb-sun-row"><span class="sr-label">🌅 Sunrise</span><span class="sr-val">${fmtTime(riseDate)}</span></div>
+      <div class="lb-sun-row blue"><span class="sr-label">🌫 Blue Hour (dawn)</span><span class="sr-val">${fmtTime(blueRiseStart)} – ${fmtTime(blueRiseEnd)}</span></div>
+      <div class="lb-sun-row golden"><span class="sr-label">🌄 Golden Hour (am)</span><span class="sr-val">${fmtTime(goldenRiseStart)} – ${fmtTime(goldenRiseEnd)}</span></div>
+      <div class="lb-sun-divider"></div>
+      <div class="lb-sun-row"><span class="sr-label">🌇 Sunset</span><span class="sr-val">${fmtTime(setDate)}</span></div>
+      <div class="lb-sun-row golden"><span class="sr-label">🌄 Golden Hour (pm)</span><span class="sr-val">${fmtTime(goldenSetStart)} – ${fmtTime(goldenSetEnd)}</span></div>
+      <div class="lb-sun-row blue"><span class="sr-label">🌫 Blue Hour (dusk)</span><span class="sr-val">${fmtTime(blueSetStart)} – ${fmtTime(blueSetEnd)}</span></div>
+      <div class="lb-sun-divider"></div>
+      <div class="lb-sun-row"><span class="sr-label">${moon.emoji} Moon</span><span class="sr-val">${moon.pct}% illuminated</span></div>
+      <div class="lb-sun-row" id="lb-aurora-row"><span class="sr-label">🌌 Aurora</span><span class="sr-val" id="lb-aurora-val">Loading…</span></div>
+    `;
+    document.getElementById("lb-sun").innerHTML = sunHtml;
+
+    // Fill aurora once it resolves
+    auroraPromise.then(aurora => {
+      const el = document.getElementById("lb-aurora-val");
+      if (el) el.textContent = aurora ? aurora.label : "Unavailable";
+    });
+
+    // Next 24 h hourly
     const now = new Date();
     const nowH = now.getFullYear()*1e6 + (now.getMonth()+1)*1e4 + now.getDate()*100 + now.getHours();
     const items = [];
@@ -1050,14 +1455,53 @@ async function loadWeather(lat, lng) {
     }
     document.getElementById("lb-hourly").innerHTML = items.join("");
 
-    // Weekly forecast
-    const days = d.daily.time.map((t,i) => `<div class="lb-d-item">
-      <span class="lb-d-day">${i===0?"Today":fmtDay(t)}</span>
-      <span class="lb-d-icon">${WX_ICON(d.daily.weather_code[i])}</span>
-      <span class="lb-d-range">${Math.round(d.daily.temperature_2m_min[i])}° – ${Math.round(d.daily.temperature_2m_max[i])}°</span>
+    // Weekly forecast (clickable days show hourly)
+    const weeklyEl = document.getElementById("lb-weekly");
+    weeklyEl.innerHTML = d.daily.time.map((t, dayIdx) => {
+      return `<div class="lb-d-item" data-day="${dayIdx}">
+        <span class="lb-d-day">${dayIdx===0?"Today":fmtDay(t)}</span>
+        <span class="lb-d-icon">${WX_ICON(d.daily.weather_code[dayIdx])}</span>
+        <span class="lb-d-range">${Math.round(d.daily.temperature_2m_min[dayIdx])}° – ${Math.round(d.daily.temperature_2m_max[dayIdx])}°</span>
+      </div>
+      <div class="lb-d-hourly" id="lb-day-${dayIdx}">
+        <div class="lb-d-hourly-inner">${buildDayHourly(d, t)}</div>
+      </div>`;
+    }).join("");
+
+    weeklyEl.querySelectorAll(".lb-d-item").forEach(el => {
+      el.addEventListener("click", () => {
+        const dayIdx = el.dataset.day;
+        const hourlyEl = document.getElementById(`lb-day-${dayIdx}`);
+        const isOpen = hourlyEl.classList.toggle("open");
+        el.classList.toggle("expanded", isOpen);
+        // Close others
+        weeklyEl.querySelectorAll(".lb-d-hourly.open").forEach(h => {
+          if (h.id !== `lb-day-${dayIdx}`) { h.classList.remove("open"); }
+        });
+        weeklyEl.querySelectorAll(".lb-d-item.expanded").forEach(other => {
+          if (other !== el) other.classList.remove("expanded");
+        });
+      });
+    });
+  } catch {
+    document.getElementById("lb-sun").innerHTML = `<div class="lb-sun-row"><span class="sr-label">Weather unavailable</span></div>`;
+  }
+}
+
+function buildDayHourly(d, dateStr) {
+  const prefix = dateStr.substring(0, 10);
+  const items = [];
+  for (let i = 0; i < d.hourly.time.length; i++) {
+    if (!d.hourly.time[i].startsWith(prefix)) continue;
+    const t = new Date(d.hourly.time[i]);
+    if (t.getHours() % 3 !== 0) continue;
+    items.push(`<div class="lb-h-item">
+      <span class="lb-h-time">${t.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</span>
+      <span class="lb-h-icon">${WX_ICON(d.hourly.weather_code[i])}</span>
+      <span class="lb-h-temp">${Math.round(d.hourly.temperature_2m[i])}°</span>
     </div>`);
-    document.getElementById("lb-weekly").innerHTML = days.join("");
-  } catch { document.getElementById("lb-sun").textContent = "Weather unavailable"; }
+  }
+  return items.join("");
 }
 
 document.getElementById("lb-forecast-toggle").addEventListener("click", () => {
@@ -1067,26 +1511,230 @@ document.getElementById("lb-forecast-toggle").addEventListener("click", () => {
   btn.textContent = open ? "Hide forecast ↑" : "Weekly forecast ↓";
 });
 
+// ─── Save locations (localStorage) ───────────────────────────────────────────
+function getSaved() {
+  try { return JSON.parse(localStorage.getItem("cinepinSaved") || "[]"); } catch { return []; }
+}
+function setSaved(arr) { localStorage.setItem("cinepinSaved", JSON.stringify(arr)); }
+function getFolders() {
+  try { return JSON.parse(localStorage.getItem("cinepinFolders") || '[{"name":"Saved","ids":[]}]'); } catch { return [{"name":"Saved","ids":[]}]; }
+}
+function setFolders(arr) { localStorage.setItem("cinepinFolders", JSON.stringify(arr)); }
+
+function isSaved(id) { return getSaved().some(s => s.id === id); }
+
+function toggleSave(ph) {
+  let saved = getSaved();
+  if (saved.some(s => s.id === ph.id)) {
+    saved = saved.filter(s => s.id !== ph.id);
+    // Remove from all folders
+    const folders = getFolders();
+    folders.forEach(f => { f.ids = f.ids.filter(id => id !== ph.id); });
+    setFolders(folders);
+  } else {
+    saved.push({ id: ph.id, title: ph.title, lat: ph.lat, lng: ph.lng, thumb: ph.thumb });
+    // Add to default folder
+    const folders = getFolders();
+    if (!folders.length) folders.push({ name: "Saved", ids: [] });
+    if (!folders[0].ids.includes(ph.id)) folders[0].ids.push(ph.id);
+    setFolders(folders);
+  }
+  setSaved(saved);
+  updateSaveBtn(ph.id);
+}
+
+function updateSaveBtn(id) {
+  const btn = document.getElementById("lb-save");
+  if (!btn) return;
+  if (isSaved(id)) {
+    btn.textContent = "★ Saved";
+    btn.classList.add("saved");
+  } else {
+    btn.textContent = "⭐ Save Location";
+    btn.classList.remove("saved");
+  }
+}
+
+document.getElementById("lb-save").addEventListener("click", () => {
+  if (currentLbPhoto) toggleSave(currentLbPhoto);
+});
+
+// ─── My Locations modal ───────────────────────────────────────────────────────
+function openMyLocations() {
+  const modal = document.getElementById("my-locations-modal");
+  renderMyLocations();
+  modal.classList.add("open");
+}
+function closeMyLocations() {
+  document.getElementById("my-locations-modal").classList.remove("open");
+}
+
+function renderMyLocations() {
+  const folders = getFolders();
+  const saved = getSaved();
+  const savedMap = new Map(saved.map(s => [s.id, s]));
+  const foldersEl = document.getElementById("ml-folders");
+
+  if (!saved.length) {
+    foldersEl.innerHTML = `<div class="ml-empty">No saved locations yet.<br>Open a photo and tap ⭐ Save Location.</div>`;
+    return;
+  }
+
+  foldersEl.innerHTML = folders.map((folder, fi) => {
+    const items = folder.ids.map(id => savedMap.get(id)).filter(Boolean);
+    if (!items.length) return "";
+    const itemsHtml = items.map(ph => `
+      <div class="ml-item" data-id="${escHtml(ph.id)}">
+        <img src="${escHtml(ph.thumb)}" alt="" loading="lazy" />
+        <div class="ml-item-name">${escHtml(ph.title)}</div>
+      </div>
+    `).join("");
+    return `<div class="ml-folder">
+      <div class="ml-folder-header">${escHtml(folder.name)}</div>
+      <div class="ml-grid">${itemsHtml}</div>
+    </div>`;
+  }).join("");
+
+  foldersEl.querySelectorAll(".ml-item").forEach(el => {
+    el.addEventListener("click", () => {
+      const id = el.dataset.id;
+      const ph = savedMap.get(id);
+      if (!ph) return;
+      closeMyLocations();
+      // Try to find in allPhotos for full object, else use saved data
+      const full = photoById.get(id) || ph;
+      openLightbox(full);
+    });
+  });
+}
+
+document.getElementById("my-locations-btn").addEventListener("click", openMyLocations);
+document.getElementById("ml-close").addEventListener("click", closeMyLocations);
+document.getElementById("ml-new-folder").addEventListener("click", () => {
+  const name = prompt("Folder name:");
+  if (!name || !name.trim()) return;
+  const folders = getFolders();
+  folders.push({ name: name.trim(), ids: [] });
+  setFolders(folders);
+  renderMyLocations();
+});
+document.getElementById("my-locations-modal").addEventListener("click", e => {
+  if (e.target === document.getElementById("my-locations-modal")) closeMyLocations();
+});
+
+// ─── Lightbox ────────────────────────────────────────────────────────────────
+function buildGallery(ph) {
+  const DELTA = 0.05;
+  galleryPhotos = allPhotos
+    .filter(p => Math.abs(p.lat - ph.lat) <= DELTA && Math.abs(p.lng - ph.lng) <= DELTA)
+    .sort((a, b) => b.views - a.views);
+  galleryIndex = galleryPhotos.findIndex(p => p.id === ph.id);
+  if (galleryIndex < 0) { galleryPhotos = [ph]; galleryIndex = 0; }
+}
+
+function updateGalleryUI() {
+  const navEl   = document.getElementById("lb-gallery-nav");
+  const countEl = document.getElementById("lb-gallery-count");
+  if (galleryPhotos.length > 1) {
+    navEl.classList.add("visible");
+    countEl.classList.add("visible");
+    countEl.textContent = `${galleryIndex + 1} / ${galleryPhotos.length}`;
+  } else {
+    navEl.classList.remove("visible");
+    countEl.classList.remove("visible");
+  }
+}
+
 function openLightbox(ph) {
+  currentLbPhoto = ph;
+  buildGallery(ph);
+  document.getElementById("lightbox-img").src = ph.large||ph.medium||ph.thumb;
+  document.getElementById("lightbox-title").textContent = ph.title;
+  document.getElementById("lb-gmaps").href = `https://www.google.com/maps/search/?api=1&query=${ph.lat},${ph.lng}`;
+  document.getElementById("lb-apmaps").href = `https://maps.apple.com/?ll=${ph.lat},${ph.lng}&q=${encodeURIComponent(ph.title)}`;
+  document.getElementById("lb-streetview").href = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${ph.lat},${ph.lng}`;
+  document.getElementById("lb-sun").innerHTML = `<div class="lb-sun-row"><span class="sr-label">Loading weather…</span></div>`;
+  document.getElementById("lb-hourly").innerHTML = "";
+  document.getElementById("lb-weekly").classList.remove("open");
+  document.getElementById("lb-forecast-toggle").textContent = "Weekly forecast ↓";
+  document.getElementById("lightbox").classList.add("open");
+  updateSaveBtn(ph.id);
+  updateGalleryUI();
+  loadWeather(ph.lat, ph.lng);
+  // Async title update with city name
+  reverseGeocodeCity(ph.lat, ph.lng).then(city => {
+    if (currentLbPhoto && currentLbPhoto.id === ph.id && city) {
+      document.getElementById("lightbox-title").textContent = `${ph.title} — ${city}`;
+    }
+  });
+}
+
+function navigateGallery(dir) {
+  const next = galleryIndex + dir;
+  if (next < 0 || next >= galleryPhotos.length) return;
+  galleryIndex = next;
+  const ph = galleryPhotos[galleryIndex];
   currentLbPhoto = ph;
   document.getElementById("lightbox-img").src = ph.large||ph.medium||ph.thumb;
   document.getElementById("lightbox-title").textContent = ph.title;
   document.getElementById("lb-gmaps").href = `https://www.google.com/maps/search/?api=1&query=${ph.lat},${ph.lng}`;
   document.getElementById("lb-apmaps").href = `https://maps.apple.com/?ll=${ph.lat},${ph.lng}&q=${encodeURIComponent(ph.title)}`;
   document.getElementById("lb-streetview").href = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${ph.lat},${ph.lng}`;
-  // Reset weather state
-  document.getElementById("lb-sun").textContent = "Loading weather…";
-  document.getElementById("lb-hourly").innerHTML = "";
-  document.getElementById("lb-weekly").classList.remove("open");
-  document.getElementById("lb-forecast-toggle").textContent = "Weekly forecast ↓";
-  document.getElementById("lightbox").classList.add("open");
-  loadWeather(ph.lat, ph.lng);
+  updateSaveBtn(ph.id);
+  updateGalleryUI();
+  reverseGeocodeCity(ph.lat, ph.lng).then(city => {
+    if (currentLbPhoto && currentLbPhoto.id === ph.id && city) {
+      document.getElementById("lightbox-title").textContent = `${ph.title} — ${city}`;
+    }
+  });
 }
+
+document.getElementById("lb-prev").addEventListener("click", () => navigateGallery(-1));
+document.getElementById("lb-next").addEventListener("click", () => navigateGallery(1));
+
+// Swipe detection on lightbox image (left/right = gallery, up/down = close)
+(function() {
+  const lbImg = document.getElementById("lightbox-img");
+  const lb = document.getElementById("lightbox");
+  let sx = 0, sy = 0;
+  lbImg.addEventListener("touchstart", e => {
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+  }, { passive: true });
+  lbImg.addEventListener("touchend", e => {
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+      navigateGallery(dx < 0 ? 1 : -1);
+    }
+  }, { passive: true });
+
+  // Swipe up/down on lightbox to close
+  let lbSy = 0;
+  lb.addEventListener("touchstart", e => { lbSy = e.touches[0].clientY; }, { passive: true });
+  lb.addEventListener("touchend", e => {
+    const dy = e.changedTouches[0].clientY - lbSy;
+    if (Math.abs(dy) > 60) closeLightbox();
+  }, { passive: true });
+})();
+
 document.getElementById("lb-navigate").addEventListener("click",()=>{ if(currentLbPhoto) navigateTo(currentLbPhoto); });
-document.getElementById("lightbox-close").addEventListener("click",closeLightbox);
-document.getElementById("lightbox").addEventListener("click",e=>{ if(e.target===document.getElementById("lightbox")) closeLightbox(); });
-document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeLightbox(); });
-function closeLightbox() { document.getElementById("lightbox").classList.remove("open"); document.getElementById("lightbox-img").src=""; }
+document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
+document.getElementById("lightbox").addEventListener("click", e => {
+  if (e.target === document.getElementById("lightbox")) closeLightbox();
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeLightbox();
+  if (document.getElementById("lightbox").classList.contains("open")) {
+    if (e.key === "ArrowLeft") navigateGallery(-1);
+    if (e.key === "ArrowRight") navigateGallery(1);
+  }
+});
+
+function closeLightbox() {
+  document.getElementById("lightbox").classList.remove("open");
+  document.getElementById("lightbox-img").src = "";
+  currentLbPhoto = null;
+}
 
 // ─── Live location ────────────────────────────────────────────────────────────
 let locMarker=null, locCircle=null, hasPanned=false;
@@ -1107,14 +1755,16 @@ if ("geolocation" in navigator) {
 function escHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 
 // ─── Block map interaction behind bottom UI ───────────────────────────────────
-// Stops Leaflet from starting a drag/zoom when the user touches the bottom panel.
-// The tag bar's own overflow-x scroll still works — the browser handles that
-// natively before propagation is checked.
 const bottomContainer = document.getElementById("bottom-container");
 L.DomEvent.disableScrollPropagation(bottomContainer);
 L.DomEvent.disableClickPropagation(bottomContainer);
 bottomContainer.addEventListener("touchstart", e => e.stopPropagation(), { passive: true });
 bottomContainer.addEventListener("touchmove",  e => e.stopPropagation(), { passive: true });
+
+// Block loc search from map interactions
+const locSearchWrap = document.getElementById("loc-search-wrap");
+L.DomEvent.disableScrollPropagation(locSearchWrap);
+L.DomEvent.disableClickPropagation(locSearchWrap);
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 loadArea();
