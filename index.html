@@ -909,14 +909,13 @@ function buildAuroraLayer() {
 
   const { radius, blur } = dynamicHeatOpts();
   auroraLayer = L.heatLayer(pts, {
-    radius: radius * 1.8,
-    blur:   blur   * 1.8,
+    radius: radius * 4,   // large enough to fully merge the 1°-grid NOAA points
+    blur:   radius * 5,   // heavy blur eliminates grid artefacts
     maxZoom: 12,
     opacity: 0.82,
     gradient: AURORA_GRADIENT,
   }).addTo(map);
-  // keep cluster markers on top
-  clusterLayer.remove(); clusterLayer.addTo(map);
+  // No clusterLayer reorder needed — aurora is added first so clusters stay on top
 }
 
 async function fetchAuroraData() {
