@@ -144,6 +144,37 @@
     }
     #heat-btn:active { opacity: 0.75; }
 
+    /* ── Aurora button ── */
+    #aurora-btn {
+      background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
+      border-radius: 20px; padding: 6px 20px; font-size: 0.76rem; font-weight: 500;
+      cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+      min-height: 34px; -webkit-user-select: none; user-select: none;
+    }
+    #aurora-btn.active {
+      background: linear-gradient(135deg, #004d1a, #00cc55);
+      border-color: #00ff88; color: #ccffe0; font-weight: 700;
+      box-shadow: 0 0 22px rgba(0,255,120,0.5), 0 0 40px rgba(100,0,255,0.2);
+      animation: aurora-btn-pulse 3s ease-in-out infinite;
+    }
+    @keyframes aurora-btn-pulse {
+      0%,100% { box-shadow: 0 0 16px rgba(0,255,120,0.45), 0 0 32px rgba(80,0,200,0.15); }
+      50%      { box-shadow: 0 0 28px rgba(0,255,120,0.7), 0 0 56px rgba(160,0,255,0.35); }
+    }
+    #aurora-btn:active { opacity: 0.75; }
+
+    /* ── Aurora canvas ── */
+    #aurora-canvas {
+      position: absolute; inset: 0; pointer-events: none; z-index: 450;
+      mix-blend-mode: screen;
+      animation: aurora-shimmer 4s ease-in-out infinite;
+    }
+    @keyframes aurora-shimmer {
+      0%,100% { opacity: 0.75; }
+      50%      { opacity: 1; }
+    }
+
     /* Main panel: slider + tags */
     #map-bottom {
       background: var(--panel); border: 1px solid var(--border);
@@ -554,6 +585,7 @@
     <div id="bottom-container">
 
       <div id="heatmap-toggle-wrap">
+        <button id="aurora-btn">🌌 Aurora</button>
         <button id="heat-btn">Heatmap</button>
       </div>
 
@@ -601,6 +633,7 @@
       </div>
     </div>
 
+    <canvas id="aurora-canvas" style="display:none"></canvas>
     <div id="status"></div>
   </div>
 </div>
@@ -838,6 +871,102 @@ map.on("zoom", () => {
     _heatRaf = null;
     if (heatLayer) heatLayer.redraw();
   });
+});
+
+// ─── Aurora overlay ───────────────────────────────────────────────────────────
+let showAurora    = false;
+let auroraCoords  = [];          // [[lng, lat, intensity], ...]
+let auroraTimer   = null;
+
+const auroraCanvas = document.getElementById("aurora-canvas");
+const auroraCtx    = auroraCanvas.getContext("2d");
+const auroraBtn    = document.getElementById("aurora-btn");
+
+function resizeAuroraCanvas() {
+  const size = map.getSize();
+  auroraCanvas.width  = size.x;
+  auroraCanvas.height = size.y;
+}
+
+function renderAurora() {
+  if (!showAurora || !auroraCoords.length) return;
+  resizeAuroraCanvas();
+  const ctx  = auroraCtx;
+  const w    = auroraCanvas.width;
+  const h    = auroraCanvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // 1° of latitude in pixels at current zoom — used for blob radius
+  const degPx = Math.abs(
+    map.latLngToContainerPoint([61, 10]).y -
+    map.latLngToContainerPoint([60, 10]).y
+  );
+  const blobR = Math.max(10, degPx * 2.5);
+
+  ctx.globalCompositeOperation = "screen"; // additive glow
+  for (const [lng, lat, intensity] of auroraCoords) {
+    if (intensity < 4) continue;
+    const pt = map.latLngToContainerPoint([lat, lng]);
+    if (pt.x < -blobR*2 || pt.x > w + blobR*2 ||
+        pt.y < -blobR*2 || pt.y > h + blobR*2) continue;
+
+    // Colour: green at low-mid, teal at mid, purple at high
+    let r = 0, g = 0, b = 0;
+    if (intensity < 40) {
+      // green
+      g = 200; r = 0; b = 80;
+    } else if (intensity < 70) {
+      // cyan-green
+      g = 230; r = 0; b = 160;
+    } else {
+      // pink-purple
+      r = 180; g = 60; b = 255;
+    }
+    const alpha = Math.min(0.85, intensity / 100 * 1.2);
+
+    const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, blobR * 3);
+    grad.addColorStop(0,   `rgba(${r},${g},${b},${alpha})`);
+    grad.addColorStop(0.4, `rgba(${r},${g},${b},${alpha * 0.5})`);
+    grad.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, blobR * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = "source-over";
+}
+
+async function fetchAuroraOverlay() {
+  try {
+    const r = await fetch("https://services.swpc.noaa.gov/json/ovation_aurora_latest.json");
+    const d = await r.json();
+    auroraCoords = d.coordinates || [];
+    renderAurora();
+  } catch(e) { console.warn("Aurora fetch:", e); }
+}
+
+function startAuroraLayer() {
+  auroraCanvas.style.display = "";
+  fetchAuroraOverlay();
+  clearInterval(auroraTimer);
+  auroraTimer = setInterval(fetchAuroraOverlay, 5 * 60 * 1000);
+  map.on("moveend zoomend", renderAurora);
+}
+
+function stopAuroraLayer() {
+  auroraCanvas.style.display = "none";
+  auroraCtx.clearRect(0, 0, auroraCanvas.width, auroraCanvas.height);
+  clearInterval(auroraTimer);
+  map.off("moveend zoomend", renderAurora);
+}
+
+resizeAuroraCanvas();
+map.on("resize", resizeAuroraCanvas);
+
+auroraBtn.addEventListener("click", () => {
+  showAurora = !showAurora;
+  auroraBtn.classList.toggle("active", showAurora);
+  if (showAurora) startAuroraLayer(); else stopAuroraLayer();
 });
 
 // Reset location button — only shown on touch devices
