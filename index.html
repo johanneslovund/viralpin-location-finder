@@ -1243,8 +1243,8 @@ async function getVegvesenAll() {
   let start = 0;
   while (true) {
     const r = await fetch(
-      `https://nvdbapiles-v3.atlas.vegvesen.no/vegobjekter/95?srid=wgs84&inkluder=lokasjon,egenskaper&antall=500&start=${start}`,
-      { headers: { 'Accept': 'application/json' } }
+      `https://nvdbapiles-v3.atlas.vegvesen.no/vegobjekter/95?srid=wgs84&antall=500&start=${start}`,
+      { headers: { 'Accept': 'application/vnd.vegvesen.nvdb-v3+json, application/json' } }
     );
     if (!r.ok) break;
     const d = await r.json();
@@ -1279,18 +1279,20 @@ async function loadWindy(bounds) {
   const S=bounds.getSouth().toFixed(4), W=bounds.getWest().toFixed(4);
   const N=bounds.getNorth().toFixed(4), E=bounds.getEast().toFixed(4);
   try {
+    // Windy Webcams API v3
     const r = await fetch(
-      `https://api.windy.com/api/webcams/v2/list/bbox/${S},${W},${N},${E}?show=webcams:location,images,player&limit=100&key=${windyApiKey}`,
-      { headers:{ 'x-windy-api-key': windyApiKey } }
+      `https://api.windy.com/webcams/api/v3/webcams?boundingBox=${S},${W},${N},${E}&limit=100&include=location,images`,
+      { headers:{ 'Authorization': `Bearer ${windyApiKey}` } }
     );
-    if (!r.ok) { console.warn("Windy HTTP", r.status, await r.text()); return; }
+    if (!r.ok) { console.warn("Windy HTTP", r.status); return; }
     const d = await r.json();
-    for (const cam of d.result?.webcams || []) {
-      const lat = cam.location.lat;
-      const lng = cam.location.lng ?? cam.location.lon; // API uses 'lng', not 'lon'
-      const img = cam.images?.current?.preview || cam.images?.daylight?.preview || "";
+    for (const cam of (d.webcams || [])) {
+      const lat = cam.location?.latitude;
+      const lng = cam.location?.longitude;
+      if (!lat || !lng) continue;
+      const img = cam.images?.current?.preview || "";
       addCamMarker(lat, lng, cam.title, img, "scenic",
-        `https://windy.com/webcams/${cam.webcamId}`);
+        `https://windy.com/webcams/${cam.id}`);
     }
   } catch(e) { console.warn("Windy:", e.message); }
 }
@@ -1299,12 +1301,15 @@ async function refreshWebcams() {
   camLayer.clearLayers();
   clearTimeout(camRefreshId);
   if (!showScenicCams && !showRoadCams) return;
+  document.getElementById("status").textContent = "Loading webcams…";
   const b = map.getBounds();
   const tasks = [];
   if (showRoadCams)   tasks.push(loadVegvesen(b));
   if (showScenicCams) tasks.push(loadWindy(b));
   await Promise.all(tasks);
-  // Auto-refresh every 90s
+  const n = camLayer.getLayers().length;
+  document.getElementById("status").textContent = n ? `${n} webcams` : "No webcams in view";
+  setTimeout(() => { document.getElementById("status").textContent = ""; }, 4000);
   camRefreshId = setTimeout(refreshWebcams, 90000);
 }
 
