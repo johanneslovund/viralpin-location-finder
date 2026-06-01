@@ -721,7 +721,7 @@
 
 <script>
 // ─── Map ──────────────────────────────────────────────────────────────────────
-const map = L.map("map", { zoomControl: true, tap: true }).setView([65.0, 15.0], 5);
+const map = L.map("map", { zoomControl: true, tap: true, zoomSnap: 0.25 }).setView([50.0, 8.0], 3);
 L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
   attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
   subdomains: "abcd", maxZoom: 20, detectRetina: true,
@@ -1123,7 +1123,7 @@ async function updateLocationLabels() {
 
     const icon = L.divIcon({
       className: "loc-icon",
-      html: `<div class="loc-label"><span class="loc-dot"></span>${escHtml(name)}</div>`,
+      html: `<div class="loc-label">${escHtml(name)}</div>`,
       iconSize: [0,0], iconAnchor: [0,0],
     });
     L.marker([lat, lng], { icon, interactive:false, pane:"labelPane" })
@@ -1294,19 +1294,14 @@ function preloadSurrounding() {
   }
 }
 
-// ─── Loading screen ───────────────────────────────────────────────────────────
+// ─── Loading screen + intro animation ────────────────────────────────────────
 let loadingHidden = false;
-const loadStartTime = Date.now();
 function hideLoadingScreen() {
   if (loadingHidden) return;
   loadingHidden = true;
-  const elapsed = Date.now() - loadStartTime;
-  const wait = Math.max(0, 5000 - elapsed);
   const ls = document.getElementById("loading-screen");
-  setTimeout(() => {
-    ls.classList.add("fade-out");
-    setTimeout(() => { ls.style.display = "none"; }, 850);
-  }, wait);
+  ls.classList.add("fade-out");
+  setTimeout(() => { ls.style.display = "none"; }, 900);
 }
 
 // ─── Initial area load ────────────────────────────────────────────────────────
@@ -1323,8 +1318,7 @@ async function loadArea() {
       for (const ph of pg.photo) ingestPhoto(ph);
       if (p===1) {
         buildHeatmap(); rescaleSlider();
-        renderClusters(); scheduleRender(); // direct call ensures photos appear even if timer is unreliable
-        hideLoadingScreen();
+        renderClusters(); scheduleRender();
       } else {
         scheduleHeatmap();
       }
@@ -1335,7 +1329,6 @@ async function loadArea() {
     status.textContent = "";
     preloadSurrounding();
   } catch(err) {
-    hideLoadingScreen();
     const isNetwork = err.message.toLowerCase().includes("load") || err.message.toLowerCase().includes("network") || err.message.toLowerCase().includes("fetch");
     if (isNetwork) {
       status.innerHTML = `⚠ Network blocked — try disabling content blockers for this site, then <a href="javascript:loadArea()" style="color:#7aadff">tap to retry</a>`;
@@ -1353,7 +1346,11 @@ map.on("moveend zoomend", () => {
   fetchTimer = setTimeout(() => fetchBox(map.getBounds(),3).then(preloadSurrounding), 900);
   if (showHeat) scheduleHeatmap();
 });
-map.on("zoomend", () => { if (showHeat) scheduleLabels(); });
+let lastLabelZoom = -1;
+map.on("zoomend", () => {
+  const z = Math.round(map.getZoom());
+  if (showHeat && z !== lastLabelZoom) { lastLabelZoom = z; scheduleLabels(); }
+});
 
 // ─── Tag pills ────────────────────────────────────────────────────────────────
 document.querySelectorAll(".tag-pill").forEach(pill => {
@@ -1981,6 +1978,30 @@ bottomContainer.addEventListener("touchmove",  e => e.stopPropagation(), { passi
 const locSearchWrap = document.getElementById("loc-search-wrap");
 L.DomEvent.disableScrollPropagation(locSearchWrap);
 L.DomEvent.disableClickPropagation(locSearchWrap);
+
+// ─── Intro animation ──────────────────────────────────────────────────────────
+// Prevent GPS from interrupting the intro pan
+hasPanned = true;
+
+// Zoom from continental Europe → Norway overview while logo fades
+// Phase 1 (0–2.5s): logo visible, map zooms
+// Phase 2 (2.5–5s): loading screen fades out as zoom slows
+map.flyTo([65.0, 15.0], 5.5, { duration: 5, easeLinearity: 0.06 });
+
+setTimeout(() => {
+  // Start fading the loading screen mid-animation so the map "emerges" underneath
+  const ls = document.getElementById("loading-screen");
+  ls.style.transition = "opacity 2.6s ease-in";
+  ls.style.opacity = "0";
+  ls.style.pointerEvents = "none";
+  setTimeout(() => {
+    ls.style.display = "none";
+    loadingHidden = true;
+  }, 2700);
+}, 2400);
+
+// After intro, allow GPS pan
+setTimeout(() => { hasPanned = false; }, 6000);
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 loadArea();
