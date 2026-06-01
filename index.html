@@ -628,18 +628,18 @@
   <div id="lb-gallery-count"></div>
   <div id="lightbox-info">
     <div id="lightbox-title"></div>
-    <div id="lb-weather">
-      <div id="lb-sun"></div>
-      <div id="lb-hourly-wrap"><div id="lb-hourly"></div></div>
-      <div id="lb-weekly"></div>
-      <button id="lb-forecast-toggle">Weekly forecast ↓</button>
-    </div>
     <div class="lb-links">
       <button id="lb-navigate">Navigate</button>
       <a id="lb-gmaps" href="#" target="_blank" rel="noopener">Google Maps</a>
       <a id="lb-apmaps" href="#" target="_blank" rel="noopener">Apple Maps</a>
       <a id="lb-streetview" href="#" target="_blank" rel="noopener">Street View</a>
       <button id="lb-save">⭐ Save Location</button>
+    </div>
+    <div id="lb-weather">
+      <div id="lb-sun"></div>
+      <div id="lb-hourly-wrap"><div id="lb-hourly"></div></div>
+      <div id="lb-weekly"></div>
+      <button id="lb-forecast-toggle">Weekly forecast ↓</button>
     </div>
   </div>
   <button id="lightbox-close">Close</button>
@@ -1455,11 +1455,12 @@ async function loadWeather(lat, lng) {
 
     const moon = moonPhase();
     const tides = estimateTides(lng);
-    const tideHtml = tides.map(t =>
-      t.type === 'high'
-        ? `<div class="lb-sun-row"><span class="sr-label">🌊 High Tide</span><span class="sr-val">${fmtTime(t.time)}</span></div>`
-        : `<div class="lb-sun-row"><span class="sr-label">🏖 Low Tide</span><span class="sr-val">${fmtTime(t.time)}</span></div>`
-    ).join("");
+    const highTimes = tides.filter(t => t.type==='high').map(t => fmtTime(t.time)).join(' · ');
+    const lowTimes  = tides.filter(t => t.type==='low').map(t => fmtTime(t.time)).join(' · ');
+    const tideHtml = `
+      ${highTimes ? `<div class="lb-sun-row"><span class="sr-label">🌊 High Tide</span><span class="sr-val">${highTimes}</span></div>` : ''}
+      ${lowTimes  ? `<div class="lb-sun-row"><span class="sr-label">🏖 Low Tide</span><span class="sr-val">${lowTimes}</span></div>`  : ''}
+    `;
 
     // Aurora (async, non-blocking)
     const auroraPromise = fetchAurora();
@@ -1756,13 +1757,7 @@ document.getElementById("lb-next").addEventListener("click", () => navigateGalle
     }
   }, { passive: true });
 
-  // Swipe up/down on lightbox to close
-  let lbSy = 0;
-  lb.addEventListener("touchstart", e => { lbSy = e.touches[0].clientY; }, { passive: true });
-  lb.addEventListener("touchend", e => {
-    const dy = e.changedTouches[0].clientY - lbSy;
-    if (Math.abs(dy) > 60) closeLightbox();
-  }, { passive: true });
+  // Swipe-to-close removed — lightbox is scrollable so vertical swipes mean scroll, not dismiss
 })();
 
 document.getElementById("lb-navigate").addEventListener("click",()=>{ if(currentLbPhoto) navigateTo(currentLbPhoto); });
