@@ -759,9 +759,6 @@
         <div style="position:relative">
           <button id="db-btn">Database</button>
           <div id="db-picker">
-            <button class="db-opt active" data-src="flickr">📸 Flickr<span class="db-check">✓</span></button>
-            <button class="db-opt" data-src="wikimedia">🌐 Wikimedia<span class="db-check">✓</span></button>
-            <div style="height:1px;background:var(--border);margin:4px 0"></div>
             <div class="cam-toggle-row" id="cam-scenic-row">
               <span class="cam-toggle-label"><b>🌄 Scenic Cameras</b><small>Windy.com</small></span>
               <div class="cam-toggle-switch"></div>
@@ -770,6 +767,9 @@
               <span class="cam-toggle-label"><b>🚗 Road Cameras</b><small>Statens Vegvesen</small></span>
               <div class="cam-toggle-switch"></div>
             </div>
+            <div style="height:1px;background:var(--border);margin:4px 0"></div>
+            <button class="db-opt active" data-src="flickr">📸 Flickr<span class="db-check">✓</span></button>
+            <button class="db-opt" data-src="wikimedia">🌐 Wikimedia<span class="db-check">✓</span></button>
           </div>
         </div>
       </div>
@@ -985,9 +985,9 @@ function buildClusters(photos, zoom) {
 let renderScheduled = false;
 
 function scheduleRender() {
-  if (renderScheduled) return;
+  if (renderScheduled || showScenicCams || showRoadCams) return; // skip in webcam mode
   renderScheduled = true;
-  setTimeout(() => { renderScheduled = false; renderClusters(); }, 60);
+  setTimeout(() => { renderScheduled = false; renderClusters(); }, 120);
 }
 
 function renderClusters() {
@@ -1068,7 +1068,7 @@ function buildHeatmap() {
 
 function scheduleHeatmap() {
   clearTimeout(heatTimer);
-  heatTimer = setTimeout(buildHeatmap, 400);
+  heatTimer = setTimeout(buildHeatmap, 600);
 }
 
 // ─── Heatmap toggle ───────────────────────────────────────────────────────────
@@ -1238,22 +1238,32 @@ function addCamMarker(lat, lng, title, imgUrl, type, extUrl) {
 async function loadVegvesen(bounds) {
   const W=bounds.getWest().toFixed(4), S=bounds.getSouth().toFixed(4);
   const E=bounds.getEast().toFixed(4), N=bounds.getNorth().toFixed(4);
-  try {
-    const r = await fetch(
-      `https://nvdbapiles-v3.atlas.vegvesen.no/vegobjekter/95?srid=wgs84&kartutsnitt=${W},${S},${E},${N}&segmentering=false&antall=200`,
-      { headers:{ 'Accept':'application/json' } }
-    );
-    const d = await r.json();
-    for (const obj of d.objekter || []) {
-      const wkt = obj.lokasjon?.geometri?.wkt || "";
-      const m = wkt.match(/POINT \(([0-9.-]+) ([0-9.-]+)\)/);
-      if (!m) continue;
-      const lng=parseFloat(m[1]), lat=parseFloat(m[2]);
-      const name = obj.egenskaper?.find(e=>e.navn==="Navn")?.verdi || `Kamera ${obj.id}`;
-      const imgUrl = `https://webkamera.atlas.vegvesen.no/public/kamera?id=${obj.id}&ts=${Date.now()}`;
-      addCamMarker(lat, lng, name, imgUrl, "road", `https://www.vegvesen.no/trafikk-og-vegkart/#Kamera?kameraId=${obj.id}`);
-    }
-  } catch(e) { console.warn("Vegvesen webcam:", e); }
+  // Try v3 first, fall back to v2
+  const urls = [
+    `https://nvdbapiles-v3.atlas.vegvesen.no/vegobjekter/95?srid=wgs84&kartutsnitt=${W},${S},${E},${N}&segmentering=false&antall=200`,
+    `https://nvdbapiles.atlas.vegvesen.no/vegobjekter/95?srid=wgs84&kartutsnitt=${W},${S},${E},${N}&segmentering=false&antall=200`
+  ];
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { headers:{ 'Accept':'application/json' } });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const cams = d.objekter || [];
+      if (!cams.length && urls.indexOf(url) < urls.length-1) continue; // try next
+      for (const obj of cams) {
+        // Handle both "POINT (lon lat)" and "POINT(lon lat)"
+        const wkt = obj.lokasjon?.geometri?.wkt || "";
+        const m = wkt.match(/POINT\s*\(\s*([0-9.-]+)\s+([0-9.-]+)\s*\)/);
+        if (!m) continue;
+        const lng=parseFloat(m[1]), lat=parseFloat(m[2]);
+        const name = obj.egenskaper?.find(e=>e.navn==="Navn")?.verdi || `Kamera ${obj.id}`;
+        const imgUrl = `https://webkamera.atlas.vegvesen.no/public/kamera?id=${obj.id}&ts=${Date.now()}`;
+        addCamMarker(lat, lng, name, imgUrl, "road",
+          `https://www.vegvesen.no/trafikk-og-vegkart/#Kamera?kameraId=${obj.id}`);
+      }
+      break;
+    } catch(e) { console.warn("Vegvesen:", e.message); }
+  }
 }
 
 async function loadWindy(bounds) {
@@ -1262,9 +1272,10 @@ async function loadWindy(bounds) {
   const N=bounds.getNorth().toFixed(4), E=bounds.getEast().toFixed(4);
   try {
     const r = await fetch(
-      `https://api.windy.com/api/webcams/v2/list/bbox/${S},${W},${N},${E}?show=webcams:location,images,player`,
+      `https://api.windy.com/api/webcams/v2/list/bbox/${S},${W},${N},${E}?show=webcams:location,images,player&limit=100`,
       { headers:{ 'x-windy-api-key': windyApiKey } }
     );
+    if (!r.ok) { console.warn("Windy HTTP", r.status, await r.text()); return; }
     const d = await r.json();
     for (const cam of d.result?.webcams || []) {
       const {lat, lon:lng} = cam.location;
@@ -1272,7 +1283,7 @@ async function loadWindy(bounds) {
       addCamMarker(lat, lng, cam.title, img, "scenic",
         `https://windy.com/webcams/${cam.webcamId}`);
     }
-  } catch(e) { console.warn("Windy webcam:", e); }
+  } catch(e) { console.warn("Windy:", e.message); }
 }
 
 async function refreshWebcams() {
@@ -1581,7 +1592,7 @@ let currentSource = "flickr"; // "flickr" | "wikimedia"
 // Wikimedia caps geosearch at 10 000 m. We tile the visible area into
 // CELL_KM-wide cells and fire one geosearch per cell (in parallel),
 // caching which cells have already been fetched.
-const WM_CELL_KM = 14;   // each cell is covered by a ~10 km radius search
+const WM_CELL_KM = 20;   // each cell is covered by a ~10 km radius search
 const WM_RADIUS  = 9500; // metres — just under the 10 000 m cap
 const wmFetchedKeys = new Set();
 
@@ -1638,7 +1649,7 @@ async function wikimediaIngestBounds(bounds) {
 
   // Too zoomed out → too many cells, skip gracefully
   const total = latCells * lngCells;
-  if (total > 25) return;
+  if (total > 9) return;
 
   // Collect uncached cell centers
   const pending = [];
@@ -1802,14 +1813,16 @@ async function loadArea() {
 
 // ─── Map events ───────────────────────────────────────────────────────────────
 map.on("moveend zoomend", () => {
-  clearTimeout(renderTimer);
-  renderTimer = setTimeout(() => { rescaleSlider(); scheduleRender(); }, 200);
-  clearTimeout(fetchTimer);
-  fetchTimer = setTimeout(() => {
-    if (currentSource === "wikimedia") wikimediaIngestBounds(map.getBounds());
-    else fetchBox(map.getBounds(),3).then(preloadSurrounding);
-  }, 900);
-  if (showHeat) scheduleHeatmap();
+  if (!showScenicCams && !showRoadCams) {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => { rescaleSlider(); scheduleRender(); }, 250);
+    clearTimeout(fetchTimer);
+    fetchTimer = setTimeout(() => {
+      if (currentSource === "wikimedia") wikimediaIngestBounds(map.getBounds());
+      else fetchBox(map.getBounds(),3).then(preloadSurrounding);
+    }, 1100);
+    if (showHeat) scheduleHeatmap();
+  }
 });
 let lastLabelZoom = -1;
 map.on("zoomend", () => {
