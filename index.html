@@ -716,7 +716,7 @@
 
 <script>
 // ─── Map ──────────────────────────────────────────────────────────────────────
-const map = L.map("map", { zoomControl: true, tap: true, zoomSnap: 0.25 }).setView([50.0, 8.0], 3);
+const map = L.map("map", { zoomControl: true, tap: true, zoomSnap: 0.25 }).setView([30.0, 0.0], 1.5);
 L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
   attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
   subdomains: "abcd", maxZoom: 20, detectRetina: true,
@@ -990,11 +990,13 @@ auroraBtn.addEventListener("click", () => {
 });
 
 // Reset location button — only shown on touch devices
+// Geiranger: default location when no GPS
+const GEIRANGER = [62.1007, 7.2050];
 document.getElementById("reset-loc-btn").addEventListener("click", () => {
   if (lastUserPos) {
     map.flyTo([lastUserPos.lat, lastUserPos.lng], 12, { duration: 1.2 });
   } else {
-    map.flyTo([65.0, 15.0], 5, { duration: 1.2 });
+    map.flyTo(GEIRANGER, 12, { duration: 1.2 });
   }
 });
 
@@ -1653,10 +1655,10 @@ async function loadWeather(lat, lng) {
     const now = new Date();
     const nowH = now.getFullYear()*1e6 + (now.getMonth()+1)*1e4 + now.getDate()*100 + now.getHours();
     const items = [];
-    for (let i = 0; i < d.hourly.time.length && items.length < 9; i++) {
+    for (let i = 0; i < d.hourly.time.length && items.length < 16; i++) {
       const t = new Date(d.hourly.time[i]);
       const tH = t.getFullYear()*1e6 + (t.getMonth()+1)*1e4 + t.getDate()*100 + t.getHours();
-      if (tH < nowH || t.getHours() % 3 !== 0) continue;
+      if (tH < nowH) continue;
       const label = items.length === 0 ? "Now" : t.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
       items.push(`<div class="lb-h-item">
         <span class="lb-h-time">${label}</span>
@@ -1972,28 +1974,26 @@ L.DomEvent.disableScrollPropagation(locSearchWrap);
 L.DomEvent.disableClickPropagation(locSearchWrap);
 
 // ─── Intro animation ──────────────────────────────────────────────────────────
-// Prevent GPS from interrupting the intro pan
+// Block GPS pan during intro
 hasPanned = true;
 
-// Zoom from continental Europe → Norway overview while logo fades
-// Phase 1 (0–2.5s): logo visible, map zooms
-// Phase 2 (2.5–5s): loading screen fades out as zoom slows
-map.flyTo([65.0, 15.0], 5.5, { duration: 5, easeLinearity: 0.06 });
-
+// Wait 4 s showing logo on globe view, then fly to Geiranger
 setTimeout(() => {
-  // Start fading the loading screen mid-animation so the map "emerges" underneath
-  const ls = document.getElementById("loading-screen");
-  ls.style.transition = "opacity 2.6s ease-in";
-  ls.style.opacity = "0";
-  ls.style.pointerEvents = "none";
-  setTimeout(() => {
-    ls.style.display = "none";
-    loadingHidden = true;
-  }, 2700);
-}, 2400);
+  // Dramatic zoom from globe → Geiranger fjord over 7 seconds
+  map.flyTo([62.1007, 7.2050], 11, { duration: 7, easeLinearity: 0.05 });
 
-// After intro, allow GPS pan
-setTimeout(() => { hasPanned = false; }, 6000);
+  // Start fading loading screen 3 s into the fly (mid-animation)
+  setTimeout(() => {
+    const ls = document.getElementById("loading-screen");
+    ls.style.transition = "opacity 3.5s ease-in";
+    ls.style.opacity = "0";
+    ls.style.pointerEvents = "none";
+    setTimeout(() => { ls.style.display = "none"; loadingHidden = true; }, 3600);
+  }, 3000);
+}, 4000);
+
+// After intro completes allow GPS pan (~11 s total)
+setTimeout(() => { hasPanned = false; }, 12000);
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 loadArea();
