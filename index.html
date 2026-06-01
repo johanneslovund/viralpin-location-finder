@@ -637,12 +637,6 @@ L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
   subdomains: "abcd", maxZoom: 20, detectRetina: true,
 }).addTo(map);
 
-// Labels overlay (crisp city labels)
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png", {
-  subdomains: "abcd", maxZoom: 20, detectRetina: true, opacity: 1, zIndex: 2,
-  pane: map.getPanes().overlayPane,
-}).addTo(map);
-
 // Navy tint overlay pane
 const overlayPane = map.createPane("navyOverlay");
 overlayPane.style.cssText = "z-index:250;pointer-events:none;background:rgba(8,22,80,0.20);";
@@ -742,7 +736,7 @@ function renderClusters() {
     const sz = single ? 44 : 56;
     const icon = L.divIcon({
       className: "",
-      html: `<div class="cm${single?" single":""}"><img class="thumb" src="${cl.best.thumb}" width="${sz}" height="${sz}"/>${!single?`<span class="badge">${fmt(cl.photos.length)}</span>`:""}</div>`,
+      html: `<div class="cm${single?" single":""}"><img class="thumb" src="${cl.best.thumb}" width="${sz}" height="${sz}" loading="lazy" decoding="async"/>${!single?`<span class="badge">${fmt(cl.photos.length)}</span>`:""}</div>`,
       iconSize: [sz,sz+10], iconAnchor: [sz/2,sz+10],
     });
     L.marker([cl.lat,cl.lng],{icon})
@@ -797,12 +791,6 @@ function buildHeatmap() {
   scheduleLabels();
 }
 
-let _heatRaf = null;
-map.on("zoom", () => {
-  if (!heatLayer) return;
-  if (_heatRaf) return;
-  _heatRaf = requestAnimationFrame(() => { _heatRaf = null; if (heatLayer) heatLayer.redraw(); });
-});
 
 function scheduleHeatmap() {
   clearTimeout(heatTimer);
@@ -916,7 +904,7 @@ async function updateLocationLabels() {
   }
   const top5 = Array.from(grid.values())
     .sort((a,b) => b.views - a.views)
-    .slice(0, 5)
+    .slice(0, 3)
     .map(g => ({ lat:g.lat/g.n, lng:g.lng/g.n }));
 
   await fadeOutLabels();
@@ -1000,7 +988,7 @@ function applyTopNFromSlider(pos) {
   userMovedSlider = true;
   lastRenderBoundsKey = ""; // force re-render
   clearTimeout(renderTimer);
-  renderTimer = setTimeout(scheduleRender, 50);
+  renderTimer = setTimeout(scheduleRender, 180);
 }
 
 function applyTopN(val) {
@@ -1009,9 +997,8 @@ function applyTopN(val) {
   slider.value = topNToSliderPos(topN, maxN);
   sliderLbl.textContent = topN >= maxN ? "All" : `Top ${topN}`;
   userMovedSlider = true;
-  lastRenderBoundsKey = "";
   clearTimeout(renderTimer);
-  renderTimer = setTimeout(scheduleRender, 50);
+  renderTimer = setTimeout(scheduleRender, 180);
 }
 
 function sliderStep() {
@@ -1144,9 +1131,9 @@ async function loadArea() {
 // ─── Map events ───────────────────────────────────────────────────────────────
 map.on("moveend zoomend", () => {
   clearTimeout(renderTimer);
-  renderTimer = setTimeout(() => { rescaleSlider(); scheduleRender(); }, 120);
+  renderTimer = setTimeout(() => { rescaleSlider(); scheduleRender(); }, 200);
   clearTimeout(fetchTimer);
-  fetchTimer = setTimeout(() => fetchBox(map.getBounds(),3).then(preloadSurrounding), 700);
+  fetchTimer = setTimeout(() => fetchBox(map.getBounds(),3).then(preloadSurrounding), 900);
   if (showHeat) scheduleHeatmap();
 });
 map.on("zoomend", () => { if (showHeat) scheduleLabels(); });
