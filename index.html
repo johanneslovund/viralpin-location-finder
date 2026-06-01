@@ -60,22 +60,35 @@
       will-change: transform;
     }
 
-    /* Heatmap row — inside map-bottom, same style as popularity */
-    #heat-section {
-      display: flex; align-items: center; gap: 10px;
-      padding: 7px 16px 6px; border-bottom: 1px solid #101830;
+    /* ── Floating heatmap button ── */
+    #heatmap-toggle-wrap {
+      position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px;
+      width: 100%;
     }
-    #heat-toggle-label {
-      font-size: 0.65rem; font-weight: 700; color: var(--muted);
-      letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap;
-      cursor: pointer; -webkit-user-select: none; user-select: none;
-      transition: color 0.15s;
+    #heat-btn {
+      background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
+      border-radius: 20px; padding: 6px 20px; font-size: 0.76rem; font-weight: 500;
+      cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s;
+      min-height: 34px; -webkit-user-select: none; user-select: none;
     }
-    #heat-toggle-label.active { color: #a8bfff; }
+    #heat-btn.active { background: #243896; border-color: #4d6fe8; color: #d8e4ff; font-weight: 600; box-shadow: 0 0 14px rgba(77,111,232,0.35); }
+    #heat-btn:active { opacity: 0.75; }
+
+    /* Intensity popup — slides down from the button */
+    #heat-settings {
+      display: none; align-items: center; gap: 8px;
+      background: var(--panel); border: 1px solid #1e2d50;
+      border-radius: 20px; padding: 6px 14px;
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      width: 100%; animation: locFadeIn 0.18s ease;
+    }
+    #heat-settings.open { display: flex; }
+    .hs-label { font-size: 0.62rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
     #heat-slider {
       flex: 1; appearance: none; -webkit-appearance: none;
       height: 2px; background: #1a2550; border-radius: 2px; outline: none; cursor: pointer;
-      touch-action: none;
+      touch-action: none; min-width: 0;
     }
     #heat-slider::-webkit-slider-thumb {
       appearance: none; -webkit-appearance: none;
@@ -87,9 +100,7 @@
       width: 20px; height: 20px; border-radius: 50%;
       background: var(--accent); border: 2.5px solid #8aadff; cursor: grab;
     }
-    #heat-slider:disabled { opacity: 0.3; cursor: default; }
-    #heat-slider:disabled::-webkit-slider-thumb { cursor: default; }
-    #heat-value { font-size: 0.67rem; color: #6878b0; font-weight: 600; white-space: nowrap; min-width: 14px; text-align: right; }
+    #heat-value { font-size: 0.67rem; color: #6878b0; font-weight: 600; min-width: 14px; text-align: right; }
 
     /* Main panel: slider + tags */
     #map-bottom {
@@ -151,10 +162,20 @@
     #tag-row {
       display: flex; align-items: stretch; min-height: 48px; overflow: hidden;
     }
+    #tag-bar-wrap {
+      flex: 1 1 0; min-width: 0; position: relative; overflow: hidden;
+    }
+    /* Fade-out mask towards the right edge to hint scrollability */
+    #tag-bar-wrap::after {
+      content: ""; pointer-events: none;
+      position: absolute; top: 0; right: 0; bottom: 0; width: 36px;
+      background: linear-gradient(to right, transparent, rgba(6,11,28,0.92));
+      z-index: 2;
+    }
     #tag-bar {
       display: flex; gap: 7px; align-items: center; flex-wrap: nowrap;
       padding: 7px 10px; overflow-x: auto; -webkit-overflow-scrolling: touch;
-      scrollbar-width: none; flex: 1 1 0; min-width: 0;
+      scrollbar-width: none; width: 100%; height: 100%;
     }
     #tag-bar::-webkit-scrollbar { display: none; }
     .tag-pill {
@@ -278,7 +299,7 @@
       min-height: 36px; display: flex; align-items: center;
     }
     .lb-links a:active, .lb-links button:active { opacity: 0.7; }
-    .lb-nav-btn { color: #70d4ff !important; border-color: #1a4878 !important; }
+    #nav-details { font-size: 0.7rem; color: #5a78c0; margin-top: 4px; line-height: 1.5; }
     #lightbox-close {
       position: absolute; top: 14px; right: 16px; font-size: 2rem;
       background: none; border: none; color: #888; cursor: pointer; padding: 4px; min-width: 40px; min-height: 40px;
@@ -326,6 +347,19 @@
 
     <!-- Bottom panel -->
     <div id="bottom-container">
+
+      <!-- Floating heatmap button + intensity popup -->
+      <div id="heatmap-toggle-wrap">
+        <div id="heat-settings">
+          <span class="hs-label">Intensity</span>
+          <button class="slider-adj" id="heat-minus">−</button>
+          <input type="range" id="heat-slider" min="1" max="5" value="3" step="1" />
+          <button class="slider-adj" id="heat-plus">+</button>
+          <span id="heat-value">3</span>
+        </div>
+        <button id="heat-btn" class="active">Heatmap</button>
+      </div>
+
       <div id="map-bottom">
 
         <div id="pop-section">
@@ -334,14 +368,6 @@
           <input type="range" id="engagement-slider" min="1" max="60" value="30" step="1" />
           <button class="slider-adj" id="slider-plus">+</button>
           <span id="slider-value">Top 30</span>
-        </div>
-
-        <div id="heat-section">
-          <span id="heat-toggle-label" class="active">Heatmap</span>
-          <button class="slider-adj" id="heat-minus">−</button>
-          <input type="range" id="heat-slider" min="1" max="5" value="3" step="1" />
-          <button class="slider-adj" id="heat-plus">+</button>
-          <span id="heat-value">3</span>
         </div>
 
         <div id="search-panel">
@@ -363,12 +389,15 @@
               <span class="search-label">Search</span>
             </div>
           </div>
-          <div id="tag-bar">
-            <button class="tag-pill active" data-value="nature,landscape">Nature</button>
-            <button class="tag-pill" data-value="fjord">Fjords</button>
-            <button class="tag-pill" data-value="mountain">Mountains</button>
-            <button class="tag-pill" data-value="aurora,northernlights">Northern Lights</button>
-            <button class="tag-pill" data-value="waterfall">Waterfalls</button>
+          <div id="tag-bar-wrap">
+            <div id="tag-bar">
+              <button class="tag-pill active" data-value="nature,landscape">Nature</button>
+              <button class="tag-pill" data-value="mountain">Mountains</button>
+              <button class="tag-pill" data-value="waterfall">Waterfalls</button>
+              <button class="tag-pill" data-value="aurora,northernlights">Northern Lights</button>
+              <button class="tag-pill" data-value="fjord">Fjords</button>
+              <button class="tag-pill" data-value="streetphotography,street">Street Photography</button>
+            </div>
           </div>
         </div>
 
@@ -385,10 +414,9 @@
   <div id="lightbox-info">
     <div id="lightbox-title"></div>
     <div class="lb-links">
-      <a id="lb-flickr" href="#" target="_blank" rel="noopener">Flickr ↗</a>
-      <a id="lb-gmaps" href="#" target="_blank" rel="noopener">Google Maps ↗</a>
-      <a id="lb-streetview" href="#" target="_blank" rel="noopener">Street View ↗</a>
-      <button class="lb-nav-btn" id="lb-navigate">🧭 Navigate</button>
+      <button id="lb-navigate">Navigate</button>
+      <a id="lb-gmaps" href="#" target="_blank" rel="noopener">Open In Google Maps</a>
+      <a id="lb-streetview" href="#" target="_blank" rel="noopener">Open In Street View</a>
     </div>
   </div>
 </div>
@@ -504,6 +532,18 @@ function fmt(n) { return n>=1000?(n/1000).toFixed(1).replace(".0","")+"k":String
 // ─── Heatmap ──────────────────────────────────────────────────────────────────
 const HEAT_GRADIENT = {0:"#0000cc",0.3:"#0088ff",0.55:"#00ffcc",0.75:"#ffdd00",0.9:"#ff4400",1:"#ff0000"};
 
+// Base radius/blur set by the intensity slider; actual values scale with zoom
+// so hotspots stay proportional at every zoom level.
+function dynamicHeatOpts() {
+  const zoom = map.getZoom();
+  // At zoom 8 → multiplier 1.0; each 3 zoom steps doubles/halves the radius
+  const mult = Math.pow(2, (zoom - 8) / 3);
+  return {
+    radius: Math.max(6, Math.round(heatRadius * mult)),
+    blur:   Math.max(4, Math.round(heatBlur   * mult)),
+  };
+}
+
 function buildHeatmap() {
   if (!showHeat || !allPhotos.length) {
     if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
@@ -523,14 +563,16 @@ function buildHeatmap() {
   const logMax = Math.log10(maxV + 1);
   const pts = visPhotos.map(p => [p.lat, p.lng, 0.08 + 0.92 * (Math.log10(p.views+1) / logMax)]);
 
+  const { radius, blur } = dynamicHeatOpts();
   if (heatLayer) {
-    // Reuse existing canvas — avoids teardown/recreate cost on every pan/zoom
     heatLayer.setLatLngs(pts);
+    // Update options if zoom changed (setOptions isn't in the public API; recreate cheaply)
+    heatLayer.options.radius = radius;
+    heatLayer.options.blur   = blur;
     heatLayer.redraw();
   } else {
     heatLayer = L.heatLayer(pts, {
-      radius:heatRadius, blur:heatBlur, maxZoom:13, opacity:0.84,
-      gradient:HEAT_GRADIENT,
+      radius, blur, maxZoom:13, opacity:0.84, gradient:HEAT_GRADIENT,
     }).addTo(map);
   }
   clusterLayer.remove(); clusterLayer.addTo(map);
@@ -553,19 +595,20 @@ function scheduleHeatmap() {
 }
 
 // ─── Heatmap intensity ────────────────────────────────────────────────────────
-let heatRadius = 30, heatBlur = 24;
+let heatRadius = 18, heatBlur = 14;
 let heatIntensity = 3;
 
-const heatSlider      = document.getElementById("heat-slider");
-const heatValueLabel  = document.getElementById("heat-value");
-const heatToggleLabel = document.getElementById("heat-toggle-label");
+const heatBtn      = document.getElementById("heat-btn");
+const heatSettings = document.getElementById("heat-settings");
+const heatSlider   = document.getElementById("heat-slider");
 
 function applyHeatIntensity(v) {
   heatIntensity = Math.max(1, Math.min(5, v));
-  heatSlider.value        = heatIntensity;
-  heatValueLabel.textContent = heatIntensity;
-  heatRadius = 10 + heatIntensity * 8;
-  heatBlur   = 8  + heatIntensity * 6;
+  heatSlider.value = heatIntensity;
+  document.getElementById("heat-value").textContent = heatIntensity;
+  // Base radius/blur — dynamicHeatOpts() will scale these by zoom
+  heatRadius = 10 + heatIntensity * 8;  // 18→50
+  heatBlur   = 8  + heatIntensity * 6;  // 14→38
   buildHeatmap();
 }
 
@@ -573,15 +616,36 @@ heatSlider.addEventListener("input", () => applyHeatIntensity(parseInt(heatSlide
 document.getElementById("heat-minus").addEventListener("click", () => applyHeatIntensity(heatIntensity - 1));
 document.getElementById("heat-plus").addEventListener("click",  () => applyHeatIntensity(heatIntensity + 1));
 
-// Clicking the "Heatmap" label toggles the layer on/off
-heatToggleLabel.addEventListener("click", () => {
+// Stop the intensity popup's own touch events from leaking to the map
+heatSettings.addEventListener("touchstart", e => e.stopPropagation(), { passive: true });
+heatSettings.addEventListener("touchmove",  e => e.stopPropagation(), { passive: true });
+
+// Short tap = toggle heatmap on/off; long press = show intensity panel
+let heatLongTimer = null;
+function heatPressStart() {
+  heatLongTimer = setTimeout(() => {
+    heatLongTimer = null;
+    heatSettings.classList.toggle("open");
+  }, 480);
+}
+function heatPressCancel() { clearTimeout(heatLongTimer); heatLongTimer = null; }
+
+heatBtn.addEventListener("mousedown",   heatPressStart);
+heatBtn.addEventListener("touchstart",  heatPressStart, { passive: true });
+heatBtn.addEventListener("mouseup",     heatPressCancel);
+heatBtn.addEventListener("mouseleave",  heatPressCancel);
+heatBtn.addEventListener("touchend",    heatPressCancel);
+heatBtn.addEventListener("touchcancel", heatPressCancel);
+heatBtn.addEventListener("click", () => {
+  if (heatSettings.classList.contains("open")) return;
   showHeat = !showHeat;
-  heatToggleLabel.classList.toggle("active", showHeat);
-  heatSlider.disabled = !showHeat;
-  document.getElementById("heat-minus").disabled = !showHeat;
-  document.getElementById("heat-plus").disabled  = !showHeat;
+  heatBtn.classList.toggle("active", showHeat);
   buildHeatmap();
-  if (!showHeat) labelLayer.clearLayers();
+  if (!showHeat) { heatSettings.classList.remove("open"); labelLayer.clearLayers(); }
+});
+document.addEventListener("click", e => {
+  if (!document.getElementById("heatmap-toggle-wrap").contains(e.target))
+    heatSettings.classList.remove("open");
 });
 
 // ─── Top-5 location labels ────────────────────────────────────────────────────
@@ -926,6 +990,11 @@ function clearAll() {
 // ─── Navigation (OSRM) ───────────────────────────────────────────────────────
 const navPanel = document.getElementById("nav-panel");
 
+function fmtDuration(secs) {
+  const m = Math.round(secs / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m/60)}h ${m%60}m`;
+}
+
 async function navigateTo(ph) {
   closeLightbox();
   document.getElementById("nav-dest-name").textContent = ph.title;
@@ -934,19 +1003,26 @@ async function navigateTo(ph) {
   if (!lastUserPos) return;
 
   const {lat:uLat,lng:uLng} = lastUserPos;
+  const coord = `${uLng},${uLat};${ph.lng},${ph.lat}`;
   try {
-    const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${uLng},${uLat};${ph.lng},${ph.lat}?overview=full&geometries=geojson`);
-    const d = await r.json();
-    if (d.code !== "Ok") throw new Error();
-    const route = d.routes[0];
+    const [carRes, footRes] = await Promise.all([
+      fetch(`https://router.project-osrm.org/route/v1/driving/${coord}?overview=full&geometries=geojson`),
+      fetch(`https://router.project-osrm.org/route/v1/foot/${coord}?overview=false`),
+    ]);
+    const [carData, footData] = await Promise.all([carRes.json(), footRes.json()]);
+    if (carData.code !== "Ok") throw new Error();
+    const route = carData.routes[0];
     const coords = route.geometry.coordinates.map(([lng,lat])=>[lat,lng]);
     if (routeLayer) map.removeLayer(routeLayer);
     routeLayer = L.polyline(coords,{color:"#4d7fff",weight:5,opacity:0.88}).addTo(map);
     map.fitBounds(routeLayer.getBounds(),{paddingTopLeft:[20,80],paddingBottomRight:[20,120]});
-    const km=(route.distance/1000).toFixed(1);
-    const mins=Math.round(route.duration/60);
-    document.getElementById("nav-details").textContent=`${km} km · ${mins<60?mins+" min":Math.floor(mins/60)+"h "+mins%60+"m"} by car`;
-  } catch { document.getElementById("nav-details").textContent="Route unavailable."; }
+    const km = (route.distance/1000).toFixed(1);
+    const carTime  = fmtDuration(route.duration);
+    const footTime = footData.code === "Ok" ? fmtDuration(footData.routes[0].duration) : null;
+    document.getElementById("nav-details").innerHTML =
+      `${km} km &nbsp;·&nbsp; ${carTime} by car` +
+      (footTime ? `<br>${footTime} on foot` : "");
+  } catch { document.getElementById("nav-details").textContent = "Route unavailable."; }
 }
 
 document.getElementById("nav-stop").addEventListener("click",()=>{
@@ -959,7 +1035,6 @@ function openLightbox(ph) {
   currentLbPhoto = ph;
   document.getElementById("lightbox-img").src = ph.large||ph.medium||ph.thumb;
   document.getElementById("lightbox-title").textContent = ph.title;
-  document.getElementById("lb-flickr").href = ph.url;
   document.getElementById("lb-gmaps").href = `https://www.google.com/maps/search/?api=1&query=${ph.lat},${ph.lng}`;
   document.getElementById("lb-streetview").href = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${ph.lat},${ph.lng}`;
   document.getElementById("lightbox").classList.add("open");
