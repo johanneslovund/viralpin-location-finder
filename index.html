@@ -259,7 +259,7 @@
     #nav-stop { background: none; border: 1px solid #2a3a6a; color: #8898c0; border-radius: 6px; padding: 5px 10px; font-size: 0.76rem; cursor: pointer; flex-shrink: 0; min-height: 32px; }
 
     #reset-loc-btn {
-      display: none; /* shown only on touch devices via JS */
+      display: inline-flex;
       background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
       border-radius: 20px; padding: 6px 14px; font-size: 0.76rem; font-weight: 500;
       cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
@@ -825,12 +825,12 @@ map.on("zoom", () => {
 });
 
 // Reset location button — only shown on touch devices
-const resetLocBtn = document.getElementById("reset-loc-btn");
-if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
-  resetLocBtn.style.display = "";
-}
-resetLocBtn.addEventListener("click", () => {
-  map.flyTo([65.0, 15.0], 5, { duration: 1.2 });
+document.getElementById("reset-loc-btn").addEventListener("click", () => {
+  if (lastUserPos) {
+    map.flyTo([lastUserPos.lat, lastUserPos.lng], 12, { duration: 1.2 });
+  } else {
+    map.flyTo([65.0, 15.0], 5, { duration: 1.2 });
+  }
 });
 
 // ─── Top-5 location labels ────────────────────────────────────────────────────
@@ -1365,6 +1365,27 @@ function addMinutes(isoOrDate, mins) {
 }
 
 // ─── Moon phase ───────────────────────────────────────────────────────────────
+function estimateTides(lng) {
+  const now = new Date();
+  const refNewMoon = new Date('2024-01-11T11:57Z');
+  const lunarPeriod = 29.53058867 * 24 * 60 * 60 * 1000;
+  const tidalPeriod = 745; // minutes — semi-diurnal (12h 25min)
+  const lunarAge = ((now - refNewMoon) % lunarPeriod) / lunarPeriod * 29.53;
+  const midnight = new Date(now); midnight.setHours(0,0,0,0);
+  const lonOffset = lng / 15 * 60;
+  const lunarDelay = (lunarAge * 50) % (tidalPeriod * 2);
+  const firstHigh = (720 + lonOffset + lunarDelay) % (tidalPeriod * 2);
+  const tides = [];
+  const dayMs = 24*60*60*1000;
+  for (let i = -2; i < 6; i++) {
+    const h = new Date(midnight.getTime() + (firstHigh + i * tidalPeriod) * 60000);
+    const l = new Date(h.getTime() + tidalPeriod / 2 * 60000);
+    if (h >= midnight && h < new Date(midnight.getTime() + dayMs)) tides.push({type:'high', time:h});
+    if (l >= midnight && l < new Date(midnight.getTime() + dayMs)) tides.push({type:'low',  time:l});
+  }
+  return tides.sort((a,b) => a.time - b.time).slice(0,4);
+}
+
 function moonPhase() {
   const now = new Date();
   const year = now.getFullYear(), month = now.getMonth()+1, day = now.getDate();
@@ -1417,6 +1438,12 @@ async function loadWeather(lat, lng) {
     const blueSetEnd      = addMinutes(setDate, 30);
 
     const moon = moonPhase();
+    const tides = estimateTides(lng);
+    const tideHtml = tides.map(t =>
+      t.type === 'high'
+        ? `<div class="lb-sun-row"><span class="sr-label">🌊 High Tide</span><span class="sr-val">${fmtTime(t.time)}</span></div>`
+        : `<div class="lb-sun-row"><span class="sr-label">🏖 Low Tide</span><span class="sr-val">${fmtTime(t.time)}</span></div>`
+    ).join("");
 
     // Aurora (async, non-blocking)
     const auroraPromise = fetchAurora();
@@ -1432,6 +1459,8 @@ async function loadWeather(lat, lng) {
       <div class="lb-sun-divider"></div>
       <div class="lb-sun-row"><span class="sr-label">${moon.emoji} Moon</span><span class="sr-val">${moon.pct}% illuminated</span></div>
       <div class="lb-sun-row" id="lb-aurora-row"><span class="sr-label">🌌 Aurora</span><span class="sr-val" id="lb-aurora-val">Loading…</span></div>
+      <div class="lb-sun-divider"></div>
+      ${tideHtml}
     `;
     document.getElementById("lb-sun").innerHTML = sunHtml;
 
