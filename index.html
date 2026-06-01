@@ -112,10 +112,10 @@
       will-change: transform;
     }
 
-    /* ── Floating heatmap button ── */
+    /* ── Floating button row (heatmap + reset + my locations) ── */
     #heatmap-toggle-wrap {
-      position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px;
-      width: 100%;
+      display: flex; flex-direction: row; align-items: center; justify-content: center;
+      gap: 10px; width: 100%;
     }
     #heat-btn {
       background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
@@ -258,10 +258,15 @@
     #nav-details { font-size: 0.7rem; color: #5a78c0; margin-top: 2px; }
     #nav-stop { background: none; border: 1px solid #2a3a6a; color: #8898c0; border-radius: 6px; padding: 5px 10px; font-size: 0.76rem; cursor: pointer; flex-shrink: 0; min-height: 32px; }
 
-    /* ── My Locations button — sits in heatmap-toggle row ── */
-    #heatmap-toggle-wrap {
-      display: flex; align-items: center; justify-content: center; gap: 10px;
+    #reset-loc-btn {
+      display: none; /* shown only on touch devices via JS */
+      background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
+      border-radius: 20px; padding: 6px 14px; font-size: 0.76rem; font-weight: 500;
+      cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      min-height: 34px; -webkit-user-select: none; user-select: none;
+      white-space: nowrap;
     }
+    #reset-loc-btn:active { opacity: 0.7; }
     #my-locations-btn {
       background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
       border-radius: 20px; padding: 6px 14px; font-size: 0.76rem; font-weight: 500;
@@ -535,7 +540,8 @@
       <!-- Heatmap toggle + My Locations in same row -->
       <div id="heatmap-toggle-wrap">
         <button id="my-locations-btn">⭐ My Locations</button>
-        <button id="heat-btn" class="active">Heatmap</button>
+        <button id="reset-loc-btn">📍 Reset</button>
+        <button id="heat-btn">Heatmap</button>
       </div>
 
       <div id="map-bottom">
@@ -646,7 +652,7 @@ let clusterLayer = L.layerGroup();
 map.createPane("labelPane").style.zIndex = "640";
 let labelLayer   = L.layerGroup().addTo(map);
 let routeLayer   = null;
-let showHeat     = true;
+let showHeat     = false;
 let currentTag   = "nature,landscape";
 let topN         = 30;
 let userMovedSlider = false;
@@ -805,6 +811,26 @@ heatBtn.addEventListener("click", () => {
   heatBtn.classList.toggle("active", showHeat);
   buildHeatmap();
   if (!showHeat) labelLayer.clearLayers();
+});
+
+// Keep heatmap canvas in sync during pinch-zoom (RAF-throttled)
+let _heatRaf = null;
+map.on("zoom", () => {
+  if (!heatLayer) return;
+  if (_heatRaf) return;
+  _heatRaf = requestAnimationFrame(() => {
+    _heatRaf = null;
+    if (heatLayer) heatLayer.redraw();
+  });
+});
+
+// Reset location button — only shown on touch devices
+const resetLocBtn = document.getElementById("reset-loc-btn");
+if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
+  resetLocBtn.style.display = "";
+}
+resetLocBtn.addEventListener("click", () => {
+  map.flyTo([65.0, 15.0], 5, { duration: 1.2 });
 });
 
 // ─── Top-5 location labels ────────────────────────────────────────────────────
