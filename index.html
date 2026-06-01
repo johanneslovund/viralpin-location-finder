@@ -39,13 +39,14 @@
     /* ── Loading screen ── */
     #loading-screen {
       position: fixed; inset: 0; z-index: 10000;
-      background: #080d1a;
+      background: transparent;
       display: flex; align-items: center; justify-content: center;
       flex-direction: column; gap: 24px;
+      pointer-events: none;
       transition: opacity 0.8s ease;
     }
-    #loading-screen.fade-out { opacity: 0; pointer-events: none; }
-    #loading-logo { width: min(280px, 70vw); height: auto; }
+    #loading-screen.fade-out { opacity: 0; }
+    #loading-logo { width: min(260px, 65vw); height: auto; filter: drop-shadow(0 2px 20px rgba(0,0,0,0.8)); }
     .loading-spinner {
       width: 36px; height: 36px;
       border: 2px solid #1a2550;
@@ -526,21 +527,21 @@
     #lightbox-title { font-size: 0.9rem; margin-bottom: 4px; color: #e8eaf0; }
     #lb-meta { font-size: 0.68rem; color: #6878a8; margin-bottom: 10px; display: flex; flex-direction: column; gap: 2px; }
     #lb-meta span { display: block; }
-    /* Folder picker */
+    /* Folder picker — compact, below save button */
+    #lb-folder-hint { font-size: 0.65rem; color: #6878a8; margin-top: 2px; display: none; cursor: pointer; }
+    #lb-folder-hint.visible { display: block; }
+    #lb-folder-hint:hover { color: #9ab; }
     #lb-folder-picker {
-      display: none; flex-direction: column; gap: 6px;
-      background: var(--panel); border: 1px solid var(--border-strong);
-      border-radius: 12px; padding: 10px 12px; margin: 6px 0;
-      backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
-      text-align: left;
+      display: none; flex-direction: column; gap: 5px;
+      margin-top: 4px; text-align: left;
     }
     #lb-folder-picker.open { display: flex; }
-    .lb-fp-label { font-size: 0.62rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
-    .lb-fp-folder { background: none; border: 1px solid var(--border-strong); color: #9ab; border-radius: 8px; padding: 5px 10px; font-size: 0.72rem; cursor: pointer; font-family: inherit; text-align: left; }
+    .lb-fp-folder { background: none; border: 1px solid var(--border-strong); color: #8ab; border-radius: 7px; padding: 4px 10px; font-size: 0.68rem; cursor: pointer; font-family: inherit; text-align: left; width: 100%; }
     .lb-fp-folder:active { opacity: 0.7; }
-    #lb-fp-new-row { display: flex; gap: 6px; margin-top: 2px; }
-    #lb-fp-input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border-strong); color: #c0d0ff; border-radius: 8px; padding: 5px 8px; font-size: 0.72rem; outline: none; font-family: inherit; }
-    #lb-fp-create { background: var(--accent); border: none; color: #fff; border-radius: 8px; padding: 5px 10px; font-size: 0.72rem; cursor: pointer; font-family: inherit; }
+    .lb-fp-folder.active { border-color: var(--accent); color: #a8c0ff; }
+    #lb-fp-new-row { display: flex; gap: 6px; }
+    #lb-fp-input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border-strong); color: #c0d0ff; border-radius: 7px; padding: 4px 8px; font-size: 0.68rem; outline: none; font-family: inherit; }
+    #lb-fp-create { background: var(--accent); border: none; color: #fff; border-radius: 7px; padding: 4px 9px; font-size: 0.68rem; cursor: pointer; font-family: inherit; white-space: nowrap; }
     .lb-links { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
     .lb-links a, .lb-links button {
       color: #7c9fff; font-size: 0.76rem; text-decoration: none;
@@ -711,12 +712,12 @@
   <div id="lightbox-info">
     <div id="lightbox-title"></div>
     <div id="lb-meta"></div>
+    <div id="lb-folder-hint"></div>
     <div id="lb-folder-picker">
-      <span class="lb-fp-label">Save to folder</span>
       <div id="lb-fp-folders"></div>
       <div id="lb-fp-new-row">
-        <input id="lb-fp-input" type="text" placeholder="New folder name…" />
-        <button id="lb-fp-create">Create</button>
+        <input id="lb-fp-input" type="text" placeholder="New folder…" />
+        <button id="lb-fp-create">+ Create</button>
       </div>
     </div>
     <div class="lb-links">
@@ -1012,13 +1013,11 @@ auroraBtn.addEventListener("click", () => {
 });
 
 // Reset location button — only shown on touch devices
-// Geiranger: default location when no GPS
-const GEIRANGER = [62.1007, 7.2050];
 document.getElementById("reset-loc-btn").addEventListener("click", () => {
   if (lastUserPos) {
-    map.flyTo([lastUserPos.lat, lastUserPos.lng], 12, { duration: 1.2 });
+    map.flyTo([lastUserPos.lat, lastUserPos.lng], 13, { duration: 1.2 });
   } else {
-    map.flyTo(GEIRANGER, 12, { duration: 1.2 });
+    map.flyTo([65.0, 14.0], 5, { duration: 1.2 });
   }
 });
 
@@ -1792,46 +1791,77 @@ function updateSaveBtn(id) {
   }
 }
 
-document.getElementById("lb-save").addEventListener("click", () => {
-  if (!currentLbPhoto) return;
-  if (isSaved(currentLbPhoto.id)) {
-    // Already saved — unsave directly
-    toggleSave(currentLbPhoto);
-    document.getElementById("lb-folder-picker").classList.remove("open");
-    return;
-  }
-  // Not saved — show folder picker
-  const picker = document.getElementById("lb-folder-picker");
-  picker.classList.toggle("open");
-  if (picker.classList.contains("open")) renderFolderPicker();
-});
-
-function renderFolderPicker() {
+function getOrCreateDefaultFolder() {
   const folders = getFolders();
-  const container = document.getElementById("lb-fp-folders");
-  container.innerHTML = folders.map((f,i) =>
-    `<button class="lb-fp-folder" data-idx="${i}">📁 ${escHtml(f.name)}</button>`
-  ).join("");
-  container.querySelectorAll(".lb-fp-folder").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const idx = parseInt(btn.dataset.idx);
-      saveToFolder(currentLbPhoto, idx);
-    });
-  });
+  let idx = folders.findIndex(f => f.name === "My Locations");
+  if (idx === -1) { folders.push({ name: "My Locations", ids: [] }); setFolders(folders); idx = folders.length - 1; }
+  return idx;
 }
 
 function saveToFolder(ph, folderIdx) {
-  const saved = getSaved();
+  let saved = getSaved();
+  // Remove from all folders first
+  const folders = getFolders();
+  folders.forEach(f => { f.ids = f.ids.filter(id => id !== ph.id); });
   if (!saved.some(s => s.id === ph.id)) {
     saved.push({ id:ph.id, title:ph.title, lat:ph.lat, lng:ph.lng, thumb:ph.thumb });
-    setSaved(saved);
   }
-  const folders = getFolders();
+  setSaved(saved);
   if (!folders[folderIdx].ids.includes(ph.id)) folders[folderIdx].ids.push(ph.id);
   setFolders(folders);
   updateSaveBtn(ph.id);
+  updateFolderHint(ph.id);
   document.getElementById("lb-folder-picker").classList.remove("open");
 }
+
+function renderFolderPicker(currentPhId) {
+  const folders = getFolders();
+  const activeFolderIdx = folders.findIndex(f => f.ids.includes(currentPhId));
+  const container = document.getElementById("lb-fp-folders");
+  container.innerHTML = folders.map((f,i) =>
+    `<button class="lb-fp-folder${i===activeFolderIdx?' active':''}" data-idx="${i}">📁 ${escHtml(f.name)}</button>`
+  ).join("");
+  container.querySelectorAll(".lb-fp-folder").forEach(btn => {
+    btn.addEventListener("click", () => saveToFolder(currentLbPhoto, parseInt(btn.dataset.idx)));
+  });
+}
+
+function updateFolderHint(id) {
+  const hint = document.getElementById("lb-folder-hint");
+  const folders = getFolders();
+  const folder = folders.find(f => f.ids.includes(id));
+  if (isSaved(id) && folder) {
+    hint.textContent = `📁 ${folder.name} — Move to another folder ▾`;
+    hint.classList.add("visible");
+  } else {
+    hint.textContent = "";
+    hint.classList.remove("visible");
+  }
+}
+
+document.getElementById("lb-folder-hint").addEventListener("click", () => {
+  const picker = document.getElementById("lb-folder-picker");
+  picker.classList.toggle("open");
+  if (picker.classList.contains("open") && currentLbPhoto) renderFolderPicker(currentLbPhoto.id);
+});
+
+document.getElementById("lb-save").addEventListener("click", () => {
+  if (!currentLbPhoto) return;
+  if (isSaved(currentLbPhoto.id)) {
+    // Unsave
+    let saved = getSaved();
+    saved = saved.filter(s => s.id !== currentLbPhoto.id);
+    const folders = getFolders();
+    folders.forEach(f => { f.ids = f.ids.filter(id => id !== currentLbPhoto.id); });
+    setSaved(saved); setFolders(folders);
+    updateSaveBtn(currentLbPhoto.id);
+    updateFolderHint(currentLbPhoto.id);
+    document.getElementById("lb-folder-picker").classList.remove("open");
+  } else {
+    // Save immediately to "My Locations"
+    saveToFolder(currentLbPhoto, getOrCreateDefaultFolder());
+  }
+});
 
 document.getElementById("lb-fp-create").addEventListener("click", () => {
   const input = document.getElementById("lb-fp-input");
@@ -1944,6 +1974,8 @@ function openLightbox(ph) {
   document.getElementById("lb-forecast-toggle").textContent = "Weekly forecast ↓";
   document.getElementById("lb-meta").innerHTML = "";
   document.getElementById("lb-folder-picker").classList.remove("open");
+  document.getElementById("lb-folder-hint").classList.remove("visible");
+  updateFolderHint(ph.id);
   document.getElementById("lightbox").classList.add("open");
   updateSaveBtn(ph.id);
   updateGalleryUI();
@@ -2047,7 +2079,7 @@ if ("geolocation" in navigator) {
   navigator.geolocation.watchPosition(pos=>{
     const {latitude:lat,longitude:lng,accuracy}=pos.coords;
     lastUserPos={lat,lng};
-    if (!hasPanned) { hasPanned=true; map.flyTo([lat,lng],9,{duration:2}); }
+    if (!hasPanned) { hasPanned=true; map.flyTo([lat,lng],13,{duration:2}); }
     if (!locMarker) {
       locMarker=L.marker([lat,lng],{icon:locIcon,zIndexOffset:2000}).addTo(map).bindTooltip("You are here",{direction:"top"});
       locCircle=L.circle([lat,lng],{radius:accuracy,color:"#4d9fff",fillColor:"#4d9fff",fillOpacity:0.07,weight:1,opacity:0.35}).addTo(map);
@@ -2084,10 +2116,10 @@ if ("geolocation" in navigator) {
   );
 }
 
-// After 4 s: fly to GPS if acquired, else Geiranger
+// After 4 s: fly to GPS if acquired, else Norway overview
 setTimeout(() => {
-  const target = introTarget || GEIRANGER;
-  const zoom   = introTarget ? 13 : 11;
+  const target = introTarget || [65.0, 14.0];
+  const zoom   = introTarget ? 13 : 5.5;
   map.flyTo(target, zoom, { duration: 7, easeLinearity: 0.05 });
 
   // Start fading loading screen 3 s into the fly
