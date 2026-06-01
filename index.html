@@ -17,12 +17,17 @@
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <style>
     :root {
-      --bg: #080d1a; --panel: rgba(6,11,28,0.86);
-      --border: #182040; --accent: #3a5ae8; --text: #c8ccdf;
-      --muted: #3a4268; --pill-active-bg: #1a2e7a; --pill-active-border: #3354c4;
+      --bg: #080d1a;
+      --panel: rgba(10,18,42,0.48);
+      --panel-blur: blur(24px) saturate(160%);
+      --border: rgba(120,160,255,0.12);
+      --border-strong: rgba(120,160,255,0.22);
+      --accent: #3a5ae8; --text: #c8ccdf;
+      --muted: #4a5a88; --pill-active-bg: rgba(26,46,122,0.7); --pill-active-border: rgba(51,84,196,0.8);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
       --safe-left: env(safe-area-inset-left, 0px);
       --safe-right: env(safe-area-inset-right, 0px);
+      --glass-shine: inset 0 1px 0 rgba(255,255,255,0.07);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; height: 100dvh; overflow: hidden; }
@@ -76,12 +81,12 @@
       width: min(340px, calc(100vw - 80px));
     }
     #loc-search {
-      width: 100%; background: rgba(6,11,28,0.88); border: 1px solid #182040;
+      width: 100%; background: var(--panel); border: 1px solid var(--border-strong);
       color: #c8ccdf; border-radius: 22px; padding: 9px 16px;
       font-size: 0.82rem; outline: none; font-family: inherit;
-      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
       -webkit-appearance: none;
-      box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+      box-shadow: var(--glass-shine), 0 4px 24px rgba(0,0,0,0.4);
     }
     #loc-search::placeholder { color: #3a4268; }
     #loc-search:focus { border-color: #2a4aaf; }
@@ -89,7 +94,7 @@
       display: flex; gap: 8px; margin-top: 8px; justify-content: center;
     }
     #top-action-btns button {
-      background: rgba(6,11,28,0.88); border: 1px solid #182040; color: #5868a0;
+      background: var(--panel); border: 1px solid var(--border-strong); color: #7888b8;
       border-radius: 20px; padding: 7px 14px; font-size: 0.76rem; font-weight: 500;
       cursor: pointer; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
       min-height: 34px; -webkit-user-select: none; user-select: none;
@@ -131,11 +136,12 @@
       gap: 10px; width: 100%;
     }
     #heat-btn {
-      background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
+      background: var(--panel); border: 1px solid var(--border-strong); color: #7888b8;
       border-radius: 20px; padding: 6px 20px; font-size: 0.76rem; font-weight: 500;
-      cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-      transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s;
+      cursor: pointer; backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
+      transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
       min-height: 34px; -webkit-user-select: none; user-select: none;
+      box-shadow: var(--glass-shine);
     }
     #heat-btn.active {
       background: linear-gradient(135deg, #b83a00, #ff7700);
@@ -150,13 +156,37 @@
     }
     #heat-btn:active { opacity: 0.75; }
 
-    /* ── Aurora button ── */
+    /* ── Aurora button + legend ── */
     #aurora-btn {
-      background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
+      background: var(--panel); border: 1px solid var(--border-strong); color: #7888b8;
       border-radius: 20px; padding: 6px 20px; font-size: 0.76rem; font-weight: 500;
-      cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      cursor: pointer; backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
       transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
       min-height: 34px; -webkit-user-select: none; user-select: none;
+      box-shadow: var(--glass-shine);
+    }
+
+    /* Aurora legend — vertical bar on left */
+    #aurora-legend {
+      display: none; position: absolute; left: 14px;
+      bottom: calc(180px + env(safe-area-inset-bottom, 0px));
+      z-index: 810; flex-direction: column; align-items: center; gap: 6px;
+      background: var(--panel); border: 1px solid var(--border-strong);
+      border-radius: 14px; padding: 10px 8px;
+      backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
+      box-shadow: var(--glass-shine), 0 4px 20px rgba(0,0,0,0.4);
+    }
+    #aurora-legend.visible { display: flex; }
+    #aurora-legend-bar {
+      width: 14px; height: 120px; border-radius: 7px;
+      background: linear-gradient(to bottom,
+        #cc00ff 0%, #4466ff 30%, #00ffaa 60%, #00aa44 85%, #001a08 100%);
+      box-shadow: 0 0 12px rgba(0,200,120,0.25);
+    }
+    .aurora-legend-labels {
+      position: absolute; left: 36px; top: 10px;
+      display: flex; flex-direction: column; justify-content: space-between;
+      height: 140px; font-size: 0.6rem; color: #7888b8; white-space: nowrap;
     }
     #aurora-btn.active {
       background: linear-gradient(135deg, #004d1a, #00cc55);
@@ -175,7 +205,8 @@
     #map-bottom {
       background: var(--panel); border: 1px solid var(--border);
       border-radius: 18px; overflow: hidden; width: 100%;
-      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
+      box-shadow: var(--glass-shine), 0 8px 32px rgba(0,0,0,0.4);
     }
 
     /* Popularity slider */
@@ -201,7 +232,7 @@
     }
     #slider-value { font-size: 0.67rem; color: #6878b0; font-weight: 600; white-space: nowrap; min-width: 56px; text-align: right; }
     .slider-adj {
-      background: none; border: 1px solid #1e2d50; color: #5868a0;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border-strong); color: #7888b8;
       border-radius: 6px; width: 26px; height: 26px; font-size: 1rem;
       cursor: pointer; display: flex; align-items: center; justify-content: center;
       flex-shrink: 0; padding: 0; line-height: 1; font-weight: 400;
@@ -299,7 +330,7 @@
 
     #reset-loc-btn {
       display: inline-flex;
-      background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
+      background: var(--panel); border: 1px solid var(--border-strong); color: #7888b8;
       border-radius: 20px; padding: 6px 14px; font-size: 0.76rem; font-weight: 500;
       cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
       min-height: 34px; -webkit-user-select: none; user-select: none;
@@ -307,7 +338,7 @@
     }
     #reset-loc-btn:active { opacity: 0.7; }
     #my-locations-btn {
-      background: var(--panel); border: 1px solid #1e2d50; color: #5868a0;
+      background: var(--panel); border: 1px solid var(--border-strong); color: #7888b8;
       border-radius: 20px; padding: 6px 14px; font-size: 0.76rem; font-weight: 500;
       cursor: pointer; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
       min-height: 34px; -webkit-user-select: none; user-select: none;
@@ -629,6 +660,20 @@
       </div>
     </div>
 
+    <!-- Aurora legend -->
+    <div id="aurora-legend">
+      <div style="font-size:0.58rem;color:#9ab;text-transform:uppercase;letter-spacing:0.06em;writing-mode:vertical-rl;transform:rotate(180deg);margin-bottom:4px">Aurora</div>
+      <div style="position:relative">
+        <div id="aurora-legend-bar"></div>
+        <div class="aurora-legend-labels">
+          <span style="color:#dd66ff">Strong</span>
+          <span style="color:#6699ff">High</span>
+          <span style="color:#00ffaa">Mid</span>
+          <span style="color:#00cc44">Low</span>
+        </div>
+      </div>
+    </div>
+
     <div id="status"></div>
   </div>
 </div>
@@ -932,9 +977,12 @@ function stopAurora() {
   if (auroraLayer) { map.removeLayer(auroraLayer); auroraLayer = null; }
 }
 
+const auroraLegend = document.getElementById("aurora-legend");
+
 auroraBtn.addEventListener("click", () => {
   showAurora = !showAurora;
   auroraBtn.classList.toggle("active", showAurora);
+  auroraLegend.classList.toggle("visible", showAurora);
   // Mutual exclusion — turn off heatmap
   if (showAurora && showHeat) {
     showHeat = false;
