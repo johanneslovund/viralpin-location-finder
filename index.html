@@ -170,34 +170,33 @@
     #aurora-legend {
       display: none; position: absolute; left: 14px;
       top: 50%; transform: translateY(-50%);
-      z-index: 810; flex-direction: column; align-items: center; gap: 6px;
+      z-index: 810;
       background: var(--panel); border: 1px solid var(--border-strong);
-      border-radius: 14px; padding: 10px 8px;
+      border-radius: 14px; padding: 10px 10px;
       backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
       box-shadow: var(--glass-shine), 0 4px 20px rgba(0,0,0,0.4);
     }
-    #aurora-legend.visible { display: flex; }
+    #aurora-legend.visible { display: flex; align-items: center; }
+    #aurora-legend-inner { display: flex; gap: 8px; align-items: stretch; }
     #aurora-legend-bar {
-      width: 14px; height: 130px; border-radius: 7px; position: relative; overflow: hidden;
+      width: 13px; height: 120px; border-radius: 6px; position: relative; overflow: hidden; flex-shrink: 0;
       background: linear-gradient(to bottom,
-        #ff2200 0%, #ff6600 20%, #ffaa00 38%, #00ddff 58%, #00aa55 80%, #004422 100%);
-      box-shadow: 0 0 14px rgba(0,200,120,0.3);
+        #b268fb 0%, #2af373 38%, #009b95 68%, #a3cab7 100%);
+      box-shadow: 0 0 10px rgba(42,243,115,0.25);
     }
-    /* Animated shimmer over the legend bar */
     #aurora-legend-bar::after {
       content: ""; position: absolute; inset: 0;
-      background: linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
+      background: linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
       animation: aurora-legend-wave 2.4s ease-in-out infinite;
-      border-radius: 7px;
+      border-radius: 6px;
     }
     @keyframes aurora-legend-wave {
       0%   { transform: translateY(-100%); }
       100% { transform: translateY(100%); }
     }
     .aurora-legend-labels {
-      position: absolute; left: 28px; top: 10px;
       display: flex; flex-direction: column; justify-content: space-between;
-      height: 150px; font-size: 0.6rem; color: #7888b8; white-space: nowrap;
+      height: 120px; font-size: 0.6rem; white-space: nowrap;
     }
     #aurora-btn.active {
       background: linear-gradient(135deg, #004d1a, #00cc55);
@@ -412,7 +411,7 @@
       transform: translate(-50%, -100%); margin-top: -10px;
       background: rgba(40,20,8,0.88); border: 1px solid #e8880a;
       color: #ffe0a0; font-size: 0.72rem; font-weight: 700;
-      padding: 4px 10px 4px 8px; border-radius: 7px;
+      padding: 4px 10px; border-radius: 7px;
       box-shadow: 0 2px 16px rgba(240,140,20,0.55), 0 0 28px rgba(255,120,0,0.25);
       letter-spacing: 0.02em;
       opacity: 0;
@@ -420,10 +419,7 @@
     }
     .loc-label.fading { opacity: 0 !important; transition: opacity 0.3s ease; }
     @keyframes locFadeIn { from { opacity:0; transform:translate(-50%,-120%); } to { opacity:1; transform:translate(-50%,-100%); } }
-    .loc-dot {
-      width: 5px; height: 5px; border-radius: 50%;
-      background: #7aadff; display: inline-block;
-      margin-right: 5px; vertical-align: middle;
+    .loc-dot { display: none;
     }
 
     /* ── User location dot ── */
@@ -663,14 +659,13 @@
 
     <!-- Aurora legend -->
     <div id="aurora-legend">
-      <div style="font-size:0.58rem;color:#9ab;text-transform:uppercase;letter-spacing:0.06em;writing-mode:vertical-rl;transform:rotate(180deg);margin-bottom:4px">Aurora</div>
-      <div style="position:relative">
+      <div id="aurora-legend-inner">
         <div id="aurora-legend-bar"></div>
         <div class="aurora-legend-labels">
-          <span style="color:#ff4422">Strong</span>
-          <span style="color:#ffaa00">High</span>
-          <span style="color:#00ddff">Mid</span>
-          <span style="color:#44cc88">Low</span>
+          <span style="color:#b268fb">Strong</span>
+          <span style="color:#2af373">High</span>
+          <span style="color:#009b95">Mid</span>
+          <span style="color:#a3cab7">Low</span>
         </div>
       </div>
     </div>
@@ -876,7 +871,6 @@ function buildHeatmap() {
     }).addTo(map);
   }
   clusterLayer.remove(); clusterLayer.addTo(map);
-  scheduleLabels();
 }
 
 
@@ -919,13 +913,11 @@ let auroraLayer  = null;
 let auroraTimer  = null;
 
 const AURORA_GRADIENT = {
-  0:    "#001408",
-  0.2:  "#006633",
-  0.42: "#00ccaa",
-  0.62: "#0088ff",
-  0.78: "#ff8800",
-  0.92: "#ff2200",
-  1:    "#ff0000"
+  0:    "#050e08",
+  0.25: "#a3cab7",
+  0.55: "#009b95",
+  0.78: "#2af373",
+  1:    "#b268fb"
 };
 const auroraBtn = document.getElementById("aurora-btn");
 
