@@ -1338,17 +1338,17 @@ slider.dataset.maxN = "60";
 let currentSource = "flickr"; // "flickr" | "wikimedia"
 
 // ─── Wikimedia Commons fetch (quality-filtered) ───────────────────────────────
-async function wikimediaFetchBounds(bounds) {
-  const center = bounds.getCenter();
-  const latD = (bounds.getNorth() - bounds.getSouth()) / 2;
-  const lngD = (bounds.getEast() - bounds.getWest()) / 2;
-  const radiusKm = Math.min(Math.sqrt(latD*latD + lngD*lngD) * 111, 50);
-  const radiusM  = Math.max(500, Math.min(Math.round(radiusKm * 1000), 10000));
+// Wikimedia caps geosearch at 10 000 m. We tile the visible area into
+// CELL_KM-wide cells and fire one geosearch per cell (in parallel),
+// caching which cells have already been fetched.
+const WM_CELL_KM = 14;   // each cell is covered by a ~10 km radius search
+const WM_RADIUS  = 9500; // metres — just under the 10 000 m cap
+const wmFetchedKeys = new Set();
 
-  // 1. Geosearch
+async function wikimediaFetchCell(lat, lng) {
   const geo = await fetch(`https://commons.wikimedia.org/w/api.php?${new URLSearchParams({
-    action:'query', list:'geosearch', gscoord:`${center.lat}|${center.lng}`,
-    gsradius: radiusM, gslimit: 50, format:'json', origin:'*', gsnamespace:6
+    action:'query', list:'geosearch', gscoord:`${lat}|${lng}`,
+    gsradius: WM_RADIUS, gslimit: 50, format:'json', origin:'*', gsnamespace:6
   })}`).then(r => r.json());
   const hits = geo.query?.geosearch || [];
   if (!hits.length) return [];
@@ -1356,7 +1356,6 @@ async function wikimediaFetchBounds(bounds) {
   const geoMap = {};
   hits.forEach(h => { geoMap[h.title] = { lat: h.lat, lng: h.lon }; });
 
-  // 2. Batch imageinfo + pageviews (last 30 days) in one request
   const info = await fetch(`https://commons.wikimedia.org/w/api.php?${new URLSearchParams({
     action:'query', titles: hits.map(h => h.title).join('|'),
     prop:'imageinfo|pageviews', iiprop:'url|size|timestamp', iiurlwidth:'300',
@@ -1367,19 +1366,17 @@ async function wikimediaFetchBounds(bounds) {
   for (const page of Object.values(info.query?.pages || {})) {
     const ii = page.imageinfo?.[0];
     if (!ii) continue;
-    // Quality filters: min 1500px wide, min 200KB, JPEG only
-    if ((ii.width  || 0) < 1500)   continue;
-    if ((ii.size   || 0) < 200000) continue;
+    if ((ii.width  || 0) < 1500)   continue;  // quality: min 1500 px wide
+    if ((ii.size   || 0) < 200000) continue;  // quality: min 200 KB
     if (!ii.url?.match(/\.(jpe?g)$/i)) continue;
     const geo = geoMap[page.title];
     if (!geo) continue;
-    // Real page-view count (30-day sum); fall back to megapixels if unavailable
     const pageViews = Object.values(page.pageviews || {}).reduce((s, v) => s + (v || 0), 0);
     const views = pageViews || Math.round((ii.width||0) * (ii.height||0) / 1e6);
     const clean = page.title.replace(/^File:/,'').replace(/\.[^.]+$/,'').replace(/_/g,' ');
     results.push({
-      id: `wm_${page.pageid}`,
-      title: clean, lat: geo.lat, lng: geo.lng,
+      id: `wm_${page.pageid}`, title: clean,
+      lat: geo.lat, lng: geo.lng,
       thumb:  ii.thumburl || ii.url,
       medium: ii.url, large: ii.url,
       owner: 'commons', views,
@@ -1390,12 +1387,41 @@ async function wikimediaFetchBounds(bounds) {
 }
 
 async function wikimediaIngestBounds(bounds) {
+  const S = bounds.getSouth(), N = bounds.getNorth();
+  const W = bounds.getWest(),  E = bounds.getEast();
+  const latKm = (N - S) * 111;
+  const lngKm = (E - W) * 111 * Math.cos(((N+S)/2) * Math.PI / 180);
+
+  // Divide visible area into grid cells
+  const latCells = Math.max(1, Math.ceil(latKm / WM_CELL_KM));
+  const lngCells = Math.max(1, Math.ceil(lngKm / WM_CELL_KM));
+
+  // Too zoomed out → too many cells, skip gracefully
+  const total = latCells * lngCells;
+  if (total > 25) return;
+
+  // Collect uncached cell centers
+  const pending = [];
+  for (let i = 0; i < latCells; i++) {
+    for (let j = 0; j < lngCells; j++) {
+      const lat = S + (N - S) * (i + 0.5) / latCells;
+      const lng = W + (E - W) * (j + 0.5) / lngCells;
+      const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+      if (wmFetchedKeys.has(key)) continue;
+      wmFetchedKeys.add(key);
+      pending.push([lat, lng]);
+    }
+  }
+  if (!pending.length) return;
+
   try {
-    const photos = await wikimediaFetchBounds(bounds);
+    const batches = await Promise.all(pending.map(([lat, lng]) => wikimediaFetchCell(lat, lng)));
     let added = 0;
-    for (const ph of photos) {
-      if (photoById.has(ph.id) || !ph.thumb) continue;
-      allPhotos.push(ph); photoById.set(ph.id, ph); added++;
+    for (const photos of batches) {
+      for (const ph of photos) {
+        if (photoById.has(ph.id) || !ph.thumb) continue;
+        allPhotos.push(ph); photoById.set(ph.id, ph); added++;
+      }
     }
     if (added > 0) { scheduleHeatmap(); rescaleSlider(); scheduleRender(); }
   } catch(e) { console.warn("Wikimedia:", e); }
@@ -1675,7 +1701,7 @@ async function doLocSearch(q) {
 
 // ─── Clear ────────────────────────────────────────────────────────────────────
 function clearAll() {
-  allPhotos=[]; photoById.clear(); fetchedKeys.clear();
+  allPhotos=[]; photoById.clear(); fetchedKeys.clear(); wmFetchedKeys.clear();
   clusterLayer.clearLayers(); clusterLayer.remove();
   labelLayer.clearLayers(); ++labelGen;
   if (heatLayer) { map.removeLayer(heatLayer); heatLayer=null; }
