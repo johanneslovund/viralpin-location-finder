@@ -748,9 +748,14 @@ function renderClusters() {
   const S = bounds.getSouth()-buf, N = bounds.getNorth()+buf,
         W = bounds.getWest()-buf,  E = bounds.getEast()+buf;
 
+  const center = map.getCenter();
+  const maxDist = currentRadius / 111000; // rough degrees
   const inView = [];
   for (const p of allPhotos) {
-    if (p.thumb && p.lat>=S && p.lat<=N && p.lng>=W && p.lng<=E) inView.push(p);
+    if (!p.thumb || p.lat<S || p.lat>N || p.lng<W || p.lng>E) continue;
+    const dlat = p.lat - center.lat, dlng = (p.lng - center.lng) * Math.cos(center.lat * Math.PI/180);
+    if (Math.sqrt(dlat*dlat + dlng*dlng) > maxDist) continue;
+    inView.push(p);
   }
   inView.sort((a,b) => b.views - a.views);
   const filtered = inView.slice(0, topN);
@@ -789,10 +794,14 @@ function buildHeatmap() {
 
   const bounds = map.getBounds();
   const buf = 0.15;
-  const visPhotos = allPhotos.filter(p =>
-    p.lat >= bounds.getSouth() - buf && p.lat <= bounds.getNorth() + buf &&
-    p.lng >= bounds.getWest()  - buf && p.lng <= bounds.getEast()  + buf
-  );
+  const center = map.getCenter();
+  const maxDist = currentRadius / 111000;
+  const visPhotos = allPhotos.filter(p => {
+    if (p.lat < bounds.getSouth()-buf || p.lat > bounds.getNorth()+buf ||
+        p.lng < bounds.getWest()-buf  || p.lng > bounds.getEast()+buf) return false;
+    const dlat = p.lat - center.lat, dlng = (p.lng - center.lng) * Math.cos(center.lat * Math.PI/180);
+    return Math.sqrt(dlat*dlat + dlng*dlng) <= maxDist;
+  });
   if (!visPhotos.length) return;
 
   let maxV = 1;
@@ -988,14 +997,10 @@ function applyRadius(pos) {
   currentRadius = radiusPosToMetres(pos);
   radLbl.textContent = fmtRadius(currentRadius);
 }
-radSlider.addEventListener("input", () => applyRadius(parseInt(radSlider.value)));
-document.getElementById("rad-minus").addEventListener("click", () => applyRadius(parseInt(radSlider.value) - 8));
-document.getElementById("rad-plus").addEventListener("click",  () => applyRadius(parseInt(radSlider.value) + 8));
-// Trigger a reload when radius changes (debounced)
-let radTimer = null;
-radSlider.addEventListener("change", () => { clearTimeout(radTimer); radTimer = setTimeout(() => { userMovedSlider = false; loadArea(); }, 600); });
-document.getElementById("rad-minus").addEventListener("click", () => { clearTimeout(radTimer); radTimer = setTimeout(() => { userMovedSlider = false; loadArea(); }, 600); });
-document.getElementById("rad-plus").addEventListener("click",  () => { clearTimeout(radTimer); radTimer = setTimeout(() => { userMovedSlider = false; loadArea(); }, 600); });
+// Radius changes filter display instantly — no reload needed
+radSlider.addEventListener("input", () => { applyRadius(parseInt(radSlider.value)); scheduleRender(); scheduleHeatmap(); });
+document.getElementById("rad-minus").addEventListener("click", () => { applyRadius(parseInt(radSlider.value) - 8); scheduleRender(); scheduleHeatmap(); });
+document.getElementById("rad-plus").addEventListener("click",  () => { applyRadius(parseInt(radSlider.value) + 8); scheduleRender(); scheduleHeatmap(); });
 
 // ─── Slider: non-linear (0→50: all→30, 50→100: 30→1) ──────────────────────
 const slider    = document.getElementById("engagement-slider");
@@ -1166,7 +1171,7 @@ async function loadArea() {
   clearAll(); clusterLayer.addTo(map);
 
   try {
-    const b = getRadiusBounds();
+    const b = map.getBounds();
     const bbox = `${Math.max(b.getWest(),-180).toFixed(4)},${Math.max(b.getSouth(),-90).toFixed(4)},${Math.min(b.getEast(),180).toFixed(4)},${Math.min(b.getNorth(),90).toFixed(4)}`;
     for (let p=1; p<=4; p++) {
       const pg = await flickrFetch({bbox, page:p});
