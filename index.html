@@ -170,11 +170,7 @@
     #aurora-legend {
       display: none; position: absolute; left: 14px;
       top: 50%; transform: translateY(-50%);
-      z-index: 810;
-      background: var(--panel); border: 1px solid var(--border-strong);
-      border-radius: 14px; padding: 10px 10px;
-      backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
-      box-shadow: var(--glass-shine), 0 4px 20px rgba(0,0,0,0.4);
+      z-index: 810; padding: 4px;
     }
     #aurora-legend.visible { display: flex; align-items: center; }
     #aurora-legend-inner { display: flex; gap: 8px; align-items: stretch; }
@@ -527,7 +523,24 @@
     }
     #lb-gallery-count.visible { display: block; }
     #lightbox-info { text-align: center; max-width: 500px; width: 100%; align-self: center; }
-    #lightbox-title { font-size: 0.9rem; margin-bottom: 10px; color: #e8eaf0; }
+    #lightbox-title { font-size: 0.9rem; margin-bottom: 4px; color: #e8eaf0; }
+    #lb-meta { font-size: 0.68rem; color: #6878a8; margin-bottom: 10px; display: flex; flex-direction: column; gap: 2px; }
+    #lb-meta span { display: block; }
+    /* Folder picker */
+    #lb-folder-picker {
+      display: none; flex-direction: column; gap: 6px;
+      background: var(--panel); border: 1px solid var(--border-strong);
+      border-radius: 12px; padding: 10px 12px; margin: 6px 0;
+      backdrop-filter: var(--panel-blur); -webkit-backdrop-filter: var(--panel-blur);
+      text-align: left;
+    }
+    #lb-folder-picker.open { display: flex; }
+    .lb-fp-label { font-size: 0.62rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .lb-fp-folder { background: none; border: 1px solid var(--border-strong); color: #9ab; border-radius: 8px; padding: 5px 10px; font-size: 0.72rem; cursor: pointer; font-family: inherit; text-align: left; }
+    .lb-fp-folder:active { opacity: 0.7; }
+    #lb-fp-new-row { display: flex; gap: 6px; margin-top: 2px; }
+    #lb-fp-input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border-strong); color: #c0d0ff; border-radius: 8px; padding: 5px 8px; font-size: 0.72rem; outline: none; font-family: inherit; }
+    #lb-fp-create { background: var(--accent); border: none; color: #fff; border-radius: 8px; padding: 5px 10px; font-size: 0.72rem; cursor: pointer; font-family: inherit; }
     .lb-links { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
     .lb-links a, .lb-links button {
       color: #7c9fff; font-size: 0.76rem; text-decoration: none;
@@ -697,6 +710,15 @@
   <div id="lb-gallery-count"></div>
   <div id="lightbox-info">
     <div id="lightbox-title"></div>
+    <div id="lb-meta"></div>
+    <div id="lb-folder-picker">
+      <span class="lb-fp-label">Save to folder</span>
+      <div id="lb-fp-folders"></div>
+      <div id="lb-fp-new-row">
+        <input id="lb-fp-input" type="text" placeholder="New folder name…" />
+        <button id="lb-fp-create">Create</button>
+      </div>
+    </div>
     <div class="lb-links">
       <button id="lb-navigate">Navigate</button>
       <a id="lb-gmaps" href="#" target="_blank" rel="noopener">Google Maps</a>
@@ -1648,7 +1670,9 @@ async function loadWeather(lat, lng) {
     // Fill aurora once it resolves
     auroraPromise.then(aurora => {
       const el = document.getElementById("lb-aurora-val");
-      if (el) el.textContent = aurora ? aurora.label : "Unavailable";
+      if (el) el.textContent = aurora
+        ? `${aurora.label} · Kp ${aurora.kp.toFixed(1)} (${Math.round(aurora.kp/9*100)}%)`
+        : "Unavailable";
     });
 
     // Next 24 h hourly
@@ -1769,7 +1793,55 @@ function updateSaveBtn(id) {
 }
 
 document.getElementById("lb-save").addEventListener("click", () => {
-  if (currentLbPhoto) toggleSave(currentLbPhoto);
+  if (!currentLbPhoto) return;
+  if (isSaved(currentLbPhoto.id)) {
+    // Already saved — unsave directly
+    toggleSave(currentLbPhoto);
+    document.getElementById("lb-folder-picker").classList.remove("open");
+    return;
+  }
+  // Not saved — show folder picker
+  const picker = document.getElementById("lb-folder-picker");
+  picker.classList.toggle("open");
+  if (picker.classList.contains("open")) renderFolderPicker();
+});
+
+function renderFolderPicker() {
+  const folders = getFolders();
+  const container = document.getElementById("lb-fp-folders");
+  container.innerHTML = folders.map((f,i) =>
+    `<button class="lb-fp-folder" data-idx="${i}">📁 ${escHtml(f.name)}</button>`
+  ).join("");
+  container.querySelectorAll(".lb-fp-folder").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx);
+      saveToFolder(currentLbPhoto, idx);
+    });
+  });
+}
+
+function saveToFolder(ph, folderIdx) {
+  const saved = getSaved();
+  if (!saved.some(s => s.id === ph.id)) {
+    saved.push({ id:ph.id, title:ph.title, lat:ph.lat, lng:ph.lng, thumb:ph.thumb });
+    setSaved(saved);
+  }
+  const folders = getFolders();
+  if (!folders[folderIdx].ids.includes(ph.id)) folders[folderIdx].ids.push(ph.id);
+  setFolders(folders);
+  updateSaveBtn(ph.id);
+  document.getElementById("lb-folder-picker").classList.remove("open");
+}
+
+document.getElementById("lb-fp-create").addEventListener("click", () => {
+  const input = document.getElementById("lb-fp-input");
+  const name = input.value.trim();
+  if (!name || !currentLbPhoto) return;
+  const folders = getFolders();
+  folders.push({ name, ids: [] });
+  setFolders(folders);
+  saveToFolder(currentLbPhoto, folders.length - 1);
+  input.value = "";
 });
 
 // ─── My Locations modal ───────────────────────────────────────────────────────
@@ -1870,6 +1942,8 @@ function openLightbox(ph) {
   document.getElementById("lb-hourly").innerHTML = "";
   document.getElementById("lb-weekly").classList.remove("open");
   document.getElementById("lb-forecast-toggle").textContent = "Weekly forecast ↓";
+  document.getElementById("lb-meta").innerHTML = "";
+  document.getElementById("lb-folder-picker").classList.remove("open");
   document.getElementById("lightbox").classList.add("open");
   updateSaveBtn(ph.id);
   updateGalleryUI();
@@ -1880,6 +1954,29 @@ function openLightbox(ph) {
       document.getElementById("lightbox-title").textContent = `${ph.title} — ${city}`;
     }
   });
+  // Fetch EXIF (camera, lens, date)
+  fetchExif(ph.id, ph.owner);
+}
+
+async function fetchExif(photoId, owner) {
+  try {
+    const p = new URLSearchParams({ method:"flickr.photos.getExif", api_key:CONFIG.FLICKR_API_KEY, photo_id:photoId, format:"json", nojsoncallback:1 });
+    const r = await fetch(`https://api.flickr.com/services/rest/?${p}`);
+    const d = await r.json();
+    if (d.stat !== "ok" || !d.photo) return;
+    const exif = d.photo.exif || [];
+    const get = (...tags) => { for (const tag of tags) { const e = exif.find(x => x.tag === tag); if (e) return e.raw._content; } return null; };
+    const date   = get("DateTimeOriginal","DateTime");
+    const camera = [get("Make"), get("Model")].filter(Boolean).join(" ");
+    const lens   = get("LensModel","Lens","LensInfo");
+    const meta   = document.getElementById("lb-meta");
+    if (!meta || currentLbPhoto?.id !== photoId) return;
+    const parts = [];
+    if (date)   parts.push(`📅 ${date.replace(":","-").replace(":","-").replace(" ","  ")}`);
+    if (camera) parts.push(`📷 ${camera}`);
+    if (lens)   parts.push(`🔭 ${lens}`);
+    meta.innerHTML = parts.map(p => `<span>${escHtml(p)}</span>`).join("");
+  } catch {}
 }
 
 function navigateGallery(dir) {
@@ -1974,15 +2071,26 @@ L.DomEvent.disableScrollPropagation(locSearchWrap);
 L.DomEvent.disableClickPropagation(locSearchWrap);
 
 // ─── Intro animation ──────────────────────────────────────────────────────────
-// Block GPS pan during intro
+// Block GPS watchPosition pan during intro
 hasPanned = true;
 
-// Wait 4 s showing logo on globe view, then fly to Geiranger
-setTimeout(() => {
-  // Dramatic zoom from globe → Geiranger fjord over 7 seconds
-  map.flyTo([62.1007, 7.2050], 11, { duration: 7, easeLinearity: 0.05 });
+// Try to get GPS in the background while the 4s logo shows
+let introTarget = null;
+if ("geolocation" in navigator) {
+  navigator.geolocation.getCurrentPosition(
+    pos => { introTarget = [pos.coords.latitude, pos.coords.longitude]; },
+    () => {},
+    { timeout: 3800, maximumAge: 60000, enableHighAccuracy: false }
+  );
+}
 
-  // Start fading loading screen 3 s into the fly (mid-animation)
+// After 4 s: fly to GPS if acquired, else Geiranger
+setTimeout(() => {
+  const target = introTarget || GEIRANGER;
+  const zoom   = introTarget ? 13 : 11;
+  map.flyTo(target, zoom, { duration: 7, easeLinearity: 0.05 });
+
+  // Start fading loading screen 3 s into the fly
   setTimeout(() => {
     const ls = document.getElementById("loading-screen");
     ls.style.transition = "opacity 3.5s ease-in";
@@ -1992,7 +2100,7 @@ setTimeout(() => {
   }, 3000);
 }, 4000);
 
-// After intro completes allow GPS pan (~11 s total)
+// Allow GPS watchPosition after intro (~12 s total)
 setTimeout(() => { hasPanned = false; }, 12000);
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
