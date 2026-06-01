@@ -75,21 +75,11 @@
       min-width: 210px; animation: locFadeIn 0.2s ease;
     }
     #heat-settings.open { display: flex; }
-    .hs-title { font-size: 0.65rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
-    #heat-sensitivity {
-      width: 100%; appearance: none; -webkit-appearance: none;
-      height: 2px; background: #1a2550; border-radius: 2px; outline: none; cursor: pointer;
+    #heat-intensity-row {
+      display: flex; align-items: center; gap: 10px;
     }
-    #heat-sensitivity::-webkit-slider-thumb {
-      appearance: none; -webkit-appearance: none;
-      width: 18px; height: 18px; border-radius: 50%;
-      background: #243896; border: 2px solid #6888ff; cursor: grab;
-    }
-    #heat-sensitivity::-moz-range-thumb {
-      width: 16px; height: 16px; border-radius: 50%;
-      background: #243896; border: 2px solid #6888ff; cursor: grab;
-    }
-    .hs-row { display: flex; justify-content: space-between; font-size: 0.62rem; color: #3a4268; margin-top: 2px; }
+    .hs-title { font-size: 0.65rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
+    #heat-value { font-size: 0.67rem; color: #6878b0; font-weight: 600; min-width: 14px; text-align: center; }
     #heat-btn {
       background: transparent; border: 1px solid #1e2d50; color: #5868a0;
       border-radius: 20px; padding: 6px 16px; font-size: 0.76rem; font-weight: 500;
@@ -305,7 +295,8 @@
     /* Leaflet overrides */
     .leaflet-control-attribution { background: rgba(8,13,26,0.7) !important; color: #2a3460 !important; font-size: 0.6rem !important; }
     .leaflet-control-attribution a { color: #3a4880 !important; }
-    .leaflet-bar a { background: #0a0f1e !important; color: #6878a8 !important; border-color: #151d35 !important; min-width: 36px !important; min-height: 36px !important; line-height: 36px !important; font-size: 1rem !important; }
+    .leaflet-bar a { background: transparent !important; color: #6878a8 !important; border-color: transparent !important; min-width: 36px !important; min-height: 36px !important; line-height: 36px !important; font-size: 1rem !important; }
+    .leaflet-bar { background: transparent !important; border: none !important; box-shadow: none !important; }
     .leaflet-bar a:active { opacity: 0.7; }
     .leaflet-tooltip { background: rgba(8,13,26,0.9); border: 1px solid #1a2540; color: #a8b8e0; font-size: 0.72rem; border-radius: 6px; }
 
@@ -341,9 +332,12 @@
 
       <div id="heatmap-toggle-wrap">
         <div id="heat-settings">
-          <span class="hs-title">Heatmap Sensitivity</span>
-          <input type="range" id="heat-sensitivity" min="1" max="5" value="3" step="1" />
-          <div class="hs-row"><span>Focused</span><span>Broad</span></div>
+          <div id="heat-intensity-row">
+            <span class="hs-title">Heatmap Intensity</span>
+            <button class="slider-adj" id="heat-minus">−</button>
+            <span id="heat-value">3</span>
+            <button class="slider-adj" id="heat-plus">+</button>
+          </div>
         </div>
         <button id="heat-btn" class="active">Heatmap</button>
       </div>
@@ -566,18 +560,22 @@ function scheduleHeatmap() {
   heatTimer = setTimeout(buildHeatmap, 400);
 }
 
-// ─── Heatmap sensitivity ──────────────────────────────────────────────────────
+// ─── Heatmap intensity ────────────────────────────────────────────────────────
 let heatRadius = 30, heatBlur = 24;
+let heatIntensity = 3; // 1–5
 
 const heatSettings = document.getElementById("heat-settings");
-const heatSensSlider = document.getElementById("heat-sensitivity");
 
-heatSensSlider.addEventListener("input", () => {
-  const v = parseInt(heatSensSlider.value);   // 1–5
-  heatRadius = 10 + v * 8;                    // 18 → 50
-  heatBlur   = 8  + v * 6;                    // 14 → 38
+function applyHeatIntensity(v) {
+  heatIntensity = Math.max(1, Math.min(5, v));
+  document.getElementById("heat-value").textContent = heatIntensity;
+  heatRadius = 10 + heatIntensity * 8;  // 18 → 50
+  heatBlur   = 8  + heatIntensity * 6;  // 14 → 38
   buildHeatmap();
-});
+}
+
+document.getElementById("heat-minus").addEventListener("click", () => applyHeatIntensity(heatIntensity - 1));
+document.getElementById("heat-plus").addEventListener("click",  () => applyHeatIntensity(heatIntensity + 1));
 
 // Long-press to open sensitivity panel
 let longPressTimer = null;
