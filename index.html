@@ -72,35 +72,13 @@
       transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s;
       min-height: 34px; -webkit-user-select: none; user-select: none;
     }
-    #heat-btn.active { background: #243896; border-color: #4d6fe8; color: #d8e4ff; font-weight: 600; box-shadow: 0 0 14px rgba(77,111,232,0.35); }
+    #heat-btn.active {
+      background: linear-gradient(135deg, #2a4ee8, #1a8fff);
+      border-color: #6b9fff; color: #fff; font-weight: 700;
+      box-shadow: 0 0 22px rgba(80,160,255,0.55), inset 0 1px 0 rgba(255,255,255,0.15);
+      text-shadow: 0 1px 6px rgba(0,80,255,0.4);
+    }
     #heat-btn:active { opacity: 0.75; }
-
-    /* Intensity popup — slides down from the button */
-    #heat-settings {
-      display: none; align-items: center; gap: 8px;
-      background: var(--panel); border: 1px solid #1e2d50;
-      border-radius: 20px; padding: 6px 14px;
-      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-      width: 100%; animation: locFadeIn 0.18s ease;
-    }
-    #heat-settings.open { display: flex; }
-    .hs-label { font-size: 0.62rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
-    #heat-slider {
-      flex: 1; appearance: none; -webkit-appearance: none;
-      height: 2px; background: #1a2550; border-radius: 2px; outline: none; cursor: pointer;
-      touch-action: none; min-width: 0;
-    }
-    #heat-slider::-webkit-slider-thumb {
-      appearance: none; -webkit-appearance: none;
-      width: 22px; height: 22px; border-radius: 50%;
-      background: var(--accent); border: 2.5px solid #8aadff;
-      cursor: grab; box-shadow: 0 0 10px rgba(58,90,232,0.4);
-    }
-    #heat-slider::-moz-range-thumb {
-      width: 20px; height: 20px; border-radius: 50%;
-      background: var(--accent); border: 2.5px solid #8aadff; cursor: grab;
-    }
-    #heat-value { font-size: 0.67rem; color: #6878b0; font-weight: 600; min-width: 14px; text-align: right; }
 
     /* Main panel: slider + tags */
     #map-bottom {
@@ -280,6 +258,45 @@
       100% { transform: translate(-50%,-50%) scale(2.0); opacity: 0; }
     }
 
+    /* ── Lightbox weather ── */
+    #lb-weather { margin: 6px 0 2px; text-align: left; }
+    #lb-sun {
+      display: flex; gap: 16px; justify-content: center;
+      font-size: 0.75rem; color: #8898c8; margin-bottom: 8px;
+    }
+    #lb-sun span { display: flex; align-items: center; gap: 4px; }
+    #lb-hourly-wrap {
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none; margin-bottom: 6px;
+    }
+    #lb-hourly-wrap::-webkit-scrollbar { display: none; }
+    #lb-hourly {
+      display: flex; gap: 4px; min-width: max-content; padding: 2px 0;
+    }
+    .lb-h-item {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      min-width: 46px; padding: 5px 4px; border-radius: 10px;
+      background: rgba(20,30,70,0.5); border: 1px solid #1a2448;
+    }
+    .lb-h-time { font-size: 0.58rem; color: #4a5888; }
+    .lb-h-icon { font-size: 1.05rem; line-height: 1; }
+    .lb-h-temp { font-size: 0.72rem; font-weight: 600; color: #b8ccff; }
+    #lb-weekly { display: none; flex-direction: column; gap: 3px; margin-bottom: 4px; }
+    #lb-weekly.open { display: flex; }
+    .lb-d-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 8px; border-radius: 8px; background: rgba(20,30,70,0.4);
+    }
+    .lb-d-day { font-size: 0.68rem; color: #5a6898; min-width: 30px; }
+    .lb-d-icon { font-size: 0.95rem; }
+    .lb-d-range { font-size: 0.68rem; color: #8898c0; margin-left: auto; }
+    #lb-forecast-toggle {
+      background: none; border: 1px solid #1e2a50; color: #4a5888;
+      border-radius: 8px; padding: 4px 10px; font-size: 0.65rem;
+      cursor: pointer; font-family: inherit; margin-top: 2px;
+    }
+    #lb-forecast-toggle:active { opacity: 0.7; }
+
     /* ── Lightbox ── */
     #lightbox {
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92);
@@ -348,15 +365,8 @@
     <!-- Bottom panel -->
     <div id="bottom-container">
 
-      <!-- Floating heatmap button + intensity popup -->
+      <!-- Floating heatmap toggle -->
       <div id="heatmap-toggle-wrap">
-        <div id="heat-settings">
-          <span class="hs-label">Intensity</span>
-          <button class="slider-adj" id="heat-minus">−</button>
-          <input type="range" id="heat-slider" min="1" max="5" value="3" step="1" />
-          <button class="slider-adj" id="heat-plus">+</button>
-          <span id="heat-value">3</span>
-        </div>
         <button id="heat-btn" class="active">Heatmap</button>
       </div>
 
@@ -413,6 +423,12 @@
   <img id="lightbox-img" src="" alt="" />
   <div id="lightbox-info">
     <div id="lightbox-title"></div>
+    <div id="lb-weather">
+      <div id="lb-sun"></div>
+      <div id="lb-hourly-wrap"><div id="lb-hourly"></div></div>
+      <div id="lb-weekly"></div>
+      <button id="lb-forecast-toggle">Weekly forecast ↓</button>
+    </div>
     <div class="lb-links">
       <button id="lb-navigate">Navigate</button>
       <a id="lb-gmaps" href="#" target="_blank" rel="noopener">Open In Google Maps</a>
@@ -532,16 +548,13 @@ function fmt(n) { return n>=1000?(n/1000).toFixed(1).replace(".0","")+"k":String
 // ─── Heatmap ──────────────────────────────────────────────────────────────────
 const HEAT_GRADIENT = {0:"#0000cc",0.3:"#0088ff",0.55:"#00ffcc",0.75:"#ffdd00",0.9:"#ff4400",1:"#ff0000"};
 
-// Base radius/blur set by the intensity slider; actual values scale with zoom
-// so hotspots stay proportional at every zoom level.
+// Radius grows with zoom so each spot covers a consistent geographic area.
+// At low zoom many points overlap — keeping radius small prevents giant blobs.
 function dynamicHeatOpts() {
   const zoom = map.getZoom();
-  // At zoom 8 → multiplier 1.0; each 3 zoom steps doubles/halves the radius
-  const mult = Math.pow(2, (zoom - 8) / 3);
-  return {
-    radius: Math.max(6, Math.round(heatRadius * mult)),
-    blur:   Math.max(4, Math.round(heatBlur   * mult)),
-  };
+  // Ramp from r=10 at zoom 4 up to r=36 at zoom 16, clamped at extremes.
+  const radius = Math.max(8, Math.min(40, Math.round(10 + (zoom - 4) * 2.2)));
+  return { radius, blur: Math.round(radius * 0.65) };
 }
 
 function buildHeatmap() {
@@ -594,58 +607,14 @@ function scheduleHeatmap() {
   heatTimer = setTimeout(buildHeatmap, 400);
 }
 
-// ─── Heatmap intensity ────────────────────────────────────────────────────────
-let heatRadius = 18, heatBlur = 14;
-let heatIntensity = 3;
+// ─── Heatmap toggle ───────────────────────────────────────────────────────────
+const heatBtn = document.getElementById("heat-btn");
 
-const heatBtn      = document.getElementById("heat-btn");
-const heatSettings = document.getElementById("heat-settings");
-const heatSlider   = document.getElementById("heat-slider");
-
-function applyHeatIntensity(v) {
-  heatIntensity = Math.max(1, Math.min(5, v));
-  heatSlider.value = heatIntensity;
-  document.getElementById("heat-value").textContent = heatIntensity;
-  // Base radius/blur — dynamicHeatOpts() will scale these by zoom
-  heatRadius = 10 + heatIntensity * 8;  // 18→50
-  heatBlur   = 8  + heatIntensity * 6;  // 14→38
-  buildHeatmap();
-}
-
-heatSlider.addEventListener("input", () => applyHeatIntensity(parseInt(heatSlider.value)));
-document.getElementById("heat-minus").addEventListener("click", () => applyHeatIntensity(heatIntensity - 1));
-document.getElementById("heat-plus").addEventListener("click",  () => applyHeatIntensity(heatIntensity + 1));
-
-// Stop the intensity popup's own touch events from leaking to the map
-heatSettings.addEventListener("touchstart", e => e.stopPropagation(), { passive: true });
-heatSettings.addEventListener("touchmove",  e => e.stopPropagation(), { passive: true });
-
-// Short tap = toggle heatmap on/off; long press = show intensity panel
-let heatLongTimer = null;
-function heatPressStart() {
-  heatLongTimer = setTimeout(() => {
-    heatLongTimer = null;
-    heatSettings.classList.toggle("open");
-  }, 480);
-}
-function heatPressCancel() { clearTimeout(heatLongTimer); heatLongTimer = null; }
-
-heatBtn.addEventListener("mousedown",   heatPressStart);
-heatBtn.addEventListener("touchstart",  heatPressStart, { passive: true });
-heatBtn.addEventListener("mouseup",     heatPressCancel);
-heatBtn.addEventListener("mouseleave",  heatPressCancel);
-heatBtn.addEventListener("touchend",    heatPressCancel);
-heatBtn.addEventListener("touchcancel", heatPressCancel);
 heatBtn.addEventListener("click", () => {
-  if (heatSettings.classList.contains("open")) return;
   showHeat = !showHeat;
   heatBtn.classList.toggle("active", showHeat);
   buildHeatmap();
-  if (!showHeat) { heatSettings.classList.remove("open"); labelLayer.clearLayers(); }
-});
-document.addEventListener("click", e => {
-  if (!document.getElementById("heatmap-toggle-wrap").contains(e.target))
-    heatSettings.classList.remove("open");
+  if (!showHeat) labelLayer.clearLayers();
 });
 
 // ─── Top-5 location labels ────────────────────────────────────────────────────
@@ -1005,23 +974,21 @@ async function navigateTo(ph) {
   const {lat:uLat,lng:uLng} = lastUserPos;
   const coord = `${uLng},${uLat};${ph.lng},${ph.lat}`;
   try {
-    const [carRes, footRes] = await Promise.all([
-      fetch(`https://router.project-osrm.org/route/v1/driving/${coord}?overview=full&geometries=geojson`),
-      fetch(`https://router.project-osrm.org/route/v1/foot/${coord}?overview=false`),
-    ]);
-    const [carData, footData] = await Promise.all([carRes.json(), footRes.json()]);
-    if (carData.code !== "Ok") throw new Error();
-    const route = carData.routes[0];
+    const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${coord}?overview=full&geometries=geojson`);
+    const d = await r.json();
+    if (d.code !== "Ok") throw new Error();
+    const route = d.routes[0];
     const coords = route.geometry.coordinates.map(([lng,lat])=>[lat,lng]);
     if (routeLayer) map.removeLayer(routeLayer);
     routeLayer = L.polyline(coords,{color:"#4d7fff",weight:5,opacity:0.88}).addTo(map);
     map.fitBounds(routeLayer.getBounds(),{paddingTopLeft:[20,80],paddingBottomRight:[20,120]});
     const km = (route.distance/1000).toFixed(1);
     const carTime  = fmtDuration(route.duration);
-    const footTime = footData.code === "Ok" ? fmtDuration(footData.routes[0].duration) : null;
+    // Walking speed ~5 km/h along road distance (OSRM foot profile is unreliable on public server)
+    const walkSecs = (route.distance / 1000) / 5 * 3600;
+    const footTime = fmtDuration(walkSecs);
     document.getElementById("nav-details").innerHTML =
-      `${km} km &nbsp;·&nbsp; ${carTime} by car` +
-      (footTime ? `<br>${footTime} on foot` : "");
+      `${km} km<br>🚗 ${carTime}<br>🥾 ${footTime}`;
   } catch { document.getElementById("nav-details").textContent = "Route unavailable."; }
 }
 
@@ -1031,13 +998,87 @@ document.getElementById("nav-stop").addEventListener("click",()=>{
 });
 
 // ─── Lightbox ────────────────────────────────────────────────────────────────
+const WX_ICON = c => {
+  if (c === 0) return "☀️";
+  if (c <= 3)  return "🌤";
+  if (c <= 48) return "🌫";
+  if (c <= 55) return "🌦";
+  if (c <= 65) return "🌧";
+  if (c <= 77) return "❄️";
+  if (c <= 82) return "🌦";
+  return "⛈";
+};
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtDay(iso) {
+  return new Date(iso).toLocaleDateString([], { weekday: "short" });
+}
+
+async function loadWeather(lat, lng) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+    `&hourly=temperature_2m,weather_code&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min` +
+    `&timezone=auto&forecast_days=7`;
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+
+    // Sunrise / sunset today
+    const rise = fmtTime(d.daily.sunrise[0]);
+    const set  = fmtTime(d.daily.sunset[0]);
+    document.getElementById("lb-sun").innerHTML =
+      `<span>🌅 ${rise}</span><span>🌇 ${set}</span>`;
+
+    // Next 24 h hourly (every 3 hrs, starting from current hour)
+    const now = new Date();
+    const nowH = now.getFullYear()*1e6 + (now.getMonth()+1)*1e4 + now.getDate()*100 + now.getHours();
+    const items = [];
+    for (let i = 0; i < d.hourly.time.length && items.length < 9; i++) {
+      const t = new Date(d.hourly.time[i]);
+      const tH = t.getFullYear()*1e6 + (t.getMonth()+1)*1e4 + t.getDate()*100 + t.getHours();
+      if (tH < nowH || t.getHours() % 3 !== 0) continue;
+      const label = items.length === 0 ? "Now" : t.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+      items.push(`<div class="lb-h-item">
+        <span class="lb-h-time">${label}</span>
+        <span class="lb-h-icon">${WX_ICON(d.hourly.weather_code[i])}</span>
+        <span class="lb-h-temp">${Math.round(d.hourly.temperature_2m[i])}°</span>
+      </div>`);
+    }
+    document.getElementById("lb-hourly").innerHTML = items.join("");
+
+    // Weekly forecast
+    const days = d.daily.time.map((t,i) => `<div class="lb-d-item">
+      <span class="lb-d-day">${i===0?"Today":fmtDay(t)}</span>
+      <span class="lb-d-icon">${WX_ICON(d.daily.weather_code[i])}</span>
+      <span class="lb-d-range">${Math.round(d.daily.temperature_2m_min[i])}° – ${Math.round(d.daily.temperature_2m_max[i])}°</span>
+    </div>`);
+    document.getElementById("lb-weekly").innerHTML = days.join("");
+  } catch { document.getElementById("lb-sun").textContent = "Weather unavailable"; }
+}
+
+document.getElementById("lb-forecast-toggle").addEventListener("click", () => {
+  const weekly = document.getElementById("lb-weekly");
+  const btn    = document.getElementById("lb-forecast-toggle");
+  const open   = weekly.classList.toggle("open");
+  btn.textContent = open ? "Hide forecast ↑" : "Weekly forecast ↓";
+});
+
 function openLightbox(ph) {
   currentLbPhoto = ph;
   document.getElementById("lightbox-img").src = ph.large||ph.medium||ph.thumb;
   document.getElementById("lightbox-title").textContent = ph.title;
   document.getElementById("lb-gmaps").href = `https://www.google.com/maps/search/?api=1&query=${ph.lat},${ph.lng}`;
   document.getElementById("lb-streetview").href = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${ph.lat},${ph.lng}`;
+  // Reset weather state
+  document.getElementById("lb-sun").textContent = "Loading weather…";
+  document.getElementById("lb-hourly").innerHTML = "";
+  document.getElementById("lb-weekly").classList.remove("open");
+  document.getElementById("lb-forecast-toggle").textContent = "Weekly forecast ↓";
   document.getElementById("lightbox").classList.add("open");
+  loadWeather(ph.lat, ph.lng);
 }
 document.getElementById("lb-navigate").addEventListener("click",()=>{ if(currentLbPhoto) navigateTo(currentLbPhoto); });
 document.getElementById("lightbox-close").addEventListener("click",closeLightbox);
